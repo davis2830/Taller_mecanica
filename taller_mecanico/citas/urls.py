@@ -19,11 +19,18 @@ urlpatterns = [
     # API para horas disponibles
     path('horas-disponibles/', views.horas_disponibles, name='horas_disponibles'),
     
-    # URLs para personal (admin, mecánicos, recepcionistas)
+    # Citas (Personal)
     path('calendario/', views.calendario_citas, name='calendario_citas'),
-    path('cita/<int:cita_id>/gestionar/', views.gestionar_cita, name='gestionar_cita'),
+    path('<int:cita_id>/gestionar/', views.gestionar_cita, name='gestionar_cita'),
     
-    # URLs para tipos de servicio
+    # Clínica y Recepción
+    path('recepcion/nueva/', views.nueva_recepcion, name='nueva_recepcion'),
+    path('recepcion/nueva/vehiculo/<int:vehiculo_id>/', views.nueva_recepcion, name='nueva_recepcion_vehiculo'),
+    path('recepcion/nueva/cita/<int:cita_id>/', views.nueva_recepcion, name='nueva_recepcion_cita'),
+    path('vehiculo/<int:vehiculo_id>/historial/', views.historial_vehiculo, name='historial_vehiculo'),
+    path('recepcion/<int:recepcion_id>/boleta/', views.boleta_ingreso_pdf, name='boleta_ingreso_pdf'),
+    
+    # Servicios (Configuración)
     path('servicios/', views.lista_servicios, name='lista_servicios'),
     path('servicios/agregar/', views.agregar_servicio, name='agregar_servicio'),
     path('servicios/<int:servicio_id>/editar/', views.editar_servicio, name='editar_servicio'),

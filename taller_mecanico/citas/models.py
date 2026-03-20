@@ -107,3 +107,50 @@ class Notificacion(models.Model):
     
     def __str__(self):
         return f"{self.get_tipo_display()} - Cita {self.cita.id}"
+
+# =======================================================================
+# HOJA DE RECEPCIÓN (CHECK-IN) E HISTORIAL CLÍNICO
+# =======================================================================
+
+class RecepcionVehiculo(models.Model):
+    NIVEL_GASOLINA = (
+        ('VACIO', 'Reserva / Vacío'),
+        ('CUARTO', '1/4 de Tanque'),
+        ('MEDIO', '1/2 Tanque'),
+        ('TRESCUARTOS', '3/4 de Tanque'),
+        ('LLENO', 'Tanque Lleno'),
+    )
+
+    vehiculo = models.ForeignKey(Vehiculo, on_delete=models.CASCADE, related_name='recepciones')
+    cita = models.OneToOneField(Cita, on_delete=models.SET_NULL, null=True, blank=True, related_name='recepcion')
+    
+    # 1. Datos del Ingreso
+    fecha_ingreso = models.DateTimeField(auto_now_add=True)
+    kilometraje = models.PositiveIntegerField(help_text="Kilometraje o Millaje actual")
+    nivel_gasolina = models.CharField(max_length=20, choices=NIVEL_GASOLINA, default='MEDIO')
+    
+    # 2. Motivo y Diagnóstico
+    motivo_ingreso = models.TextField(help_text="¿Qué reporta el cliente que le falla al vehículo?")
+    diagnostico_inicial = models.TextField(blank=True, null=True, help_text="Observación inicial del mecánico/recepcionista")
+    
+    # 3. Inspección Visual (Checklist de Daños)
+    danos_previos = models.TextField(blank=True, null=True, help_text="Rayones, abolladuras, golpes, pintura en mal estado, etc.")
+    
+    # 4. Inventario Abordo
+    tiene_llanta_repuesto = models.BooleanField(default=False)
+    tiene_gata_herramientas = models.BooleanField(default=False)
+    tiene_radio = models.BooleanField(default=False)
+    tiene_documentos = models.BooleanField(default=False)
+    otros_objetos = models.CharField(max_length=255, blank=True, null=True, help_text="Ej: Lentes de sol, cargadores, etc.")
+    
+    # 5. Firmas y Responsables
+    recibido_por = models.ForeignKey(User, on_delete=models.RESTRICT, related_name='vehiculos_recibidos')
+    firma_cliente_text = models.CharField(max_length=100, blank=True, null=True, help_text="Nombre escrito como firma de conformidad del cliente.")
+    
+    def __str__(self):
+        return f"Recepción {self.id:05d} - {self.vehiculo} - {self.fecha_ingreso.strftime('%d/%m/%Y')}"
+
+    class Meta:
+        ordering = ['-fecha_ingreso']
+        verbose_name = "Recepción de Vehículo"
+        verbose_name_plural = "Recepciones de Vehículos"

@@ -10,12 +10,14 @@ from datetime import datetime, timedelta
 
 from .models import (
     Proveedor, Producto, CategoriaProducto, MovimientoInventario,
-    OrdenCompra, DetalleOrdenCompra, AlertaInventario, ProductoServicio
+    OrdenCompra, DetalleOrdenCompra, AlertaInventario, ProductoServicio,
+    CuentaProveedor, PagoProveedor, PrecioProveedor
 )
 from .forms import (
     ProveedorForm, ProductoForm, CategoriaForm, MovimientoInventarioForm,
     BusquedaProductoForm, OrdenCompraForm, DetalleOrdenCompraForm,
-    ProductoServicioForm, AjusteInventarioForm
+    DetalleOrdenCompraFormSet, ProductoServicioForm, AjusteInventarioForm,
+    PagoProveedorForm
 )
 from usuarios.models import Perfil
 
@@ -642,3 +644,235 @@ def enviar_notificacion_email(self):
     except Exception as e:
         logger.error(f'❌ Error al enviar email para {self.producto.nombre}: {e}')
         return False
+
+# ============= ÓRDENES DE COMPRA =============
+
+@login_required
+def lista_ordenes_compra(request):
+    """Listado de órdenes de compra"""
+    if not es_staff_inventario(request.user):
+        messages.error(request, 'No tienes permiso para acceder a esta sección.')
+        return redirect('dashboard')
+        
+    ordenes = OrdenCompra.objects.all().order_by('-fecha_creacion')
+    
+    # Paginación
+    paginator = Paginator(ordenes, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'inventario/lista_ordenes_compra.html', {'page_obj': page_obj})
+
+@login_required
+def crear_orden_compra(request):
+    """Crear nueva orden de compra con múltiples productos"""
+    if not es_staff_inventario(request.user):
+        messages.error(request, 'No tienes permiso para acceder a esta sección.')
+        return redirect('dashboard')
+        
+    if request.method == 'POST':
+        form = OrdenCompraForm(request.POST)
+        formset = DetalleOrdenCompraFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            orden = form.save(commit=False)
+            orden.creada_por = request.user
+            orden.estado = 'SOLICITADA'
+            orden.save()
+            
+            detalles = formset.save(commit=False)
+            for detalle in detalles:
+                detalle.orden = orden
+                detalle.save()
+            
+            formset.save_m2m()
+            orden.recalcular_total() # Calcula el total inicial
+            
+            messages.success(request, 'Orden de compra creada correctamente.')
+            return redirect('lista_ordenes_compra')
+    else:
+        form = OrdenCompraForm()
+        formset = DetalleOrdenCompraFormSet()
+        
+    context = {
+        'form': form,
+        'formset': formset,
+    }
+    return render(request, 'inventario/crear_orden_compra.html', context)
+
+@login_required
+def ver_orden_compra(request, orden_id):
+    """Ver detalles de una orden de compra"""
+    if not es_staff_inventario(request.user):
+        messages.error(request, 'No tienes permiso.')
+        return redirect('dashboard')
+        
+    orden = get_object_or_404(OrdenCompra, id=orden_id)
+    return render(request, 'inventario/ver_orden_compra.html', {'orden': orden})
+
+@login_required
+def recibir_orden_compra(request, orden_id):
+    """Procesar recepción de mercancía y subir stock"""
+    from django.utils import timezone
+    if not es_staff_inventario(request.user):
+        messages.error(request, 'No tienes permiso.')
+        return redirect('dashboard')
+        
+    orden = get_object_or_404(OrdenCompra, id=orden_id)
+    
+    if orden.estado in ['COMPLETA', 'CANCELADA']:
+        messages.warning(request, 'Esta orden ya no puede recibir más mercancía.')
+        return redirect('ver_orden_compra', orden_id=orden.id)
+        
+    if request.method == 'POST':
+        for detalle in orden.detalles.all():
+            pendiente = detalle.cantidad_solicitada - detalle.cantidad_recibida
+            if pendiente > 0:
+                # Actualizar detalle
+                detalle.cantidad_recibida += pendiente
+                detalle.save()
+                
+                # Crear movimiento y subir stock
+                producto = detalle.producto
+                stock_anterior = producto.stock_actual
+                stock_nuevo = stock_anterior + pendiente
+                
+                MovimientoInventario.objects.create(
+                    producto=producto,
+                    tipo='ENTRADA',
+                    motivo='COMPRA',
+                    cantidad=pendiente,
+                    precio_unitario=detalle.precio_unitario,
+                    stock_anterior=stock_anterior,
+                    stock_nuevo=stock_nuevo,
+                    observaciones=f"Recepción OC-{orden.id:04d}",
+                    usuario=request.user
+                )
+                
+                producto.stock_actual = stock_nuevo
+                producto.save()
+                
+                # Novedad: Actualizar Catálogo de Precios del Proveedor Automáticamente
+                PrecioProveedor.objects.update_or_create(
+                    proveedor=orden.proveedor,
+                    producto=producto,
+                    defaults={'precio_ofrecido': detalle.precio_unitario}
+                )
+                
+        # Marcar orden como completa
+        orden.estado = 'COMPLETA'
+        orden.fecha_recepcion = timezone.now()
+        orden.save()
+        
+        # Generar Cuenta por Pagar automáticamente al proveedor
+        if orden.total > 0:
+            CuentaProveedor.objects.get_or_create(
+                orden_compra=orden,
+                defaults={
+                    'proveedor': orden.proveedor,
+                    'monto_total': orden.total,
+                    'monto_pagado': 0,
+                    'estado': 'PENDIENTE',
+                    'observaciones': f'Cuenta generada automáticamente por recepción de la OC-{orden.id:04d}',
+                }
+            )
+        
+        messages.success(request, f'Mercancía recibida. Se generó la Cuenta por Pagar de la OC-{orden.id:04d}.')
+        return redirect('ver_orden_compra', orden_id=orden.id)
+        
+    return render(request, 'inventario/recibir_orden_compra.html', {'orden': orden})
+
+# ============= CUENTAS POR PAGAR =============
+
+@login_required
+def lista_cuentas_pagar(request):
+    """Listado general de cuentas pendientes y pagadas"""
+    if not es_staff_inventario(request.user):
+        messages.error(request, 'No tienes permiso para acceder a esta sección.')
+        return redirect('dashboard')
+        
+    estado_filtro = request.GET.get('estado', '')
+    cuentas = CuentaProveedor.objects.all().order_by('-fecha_emision')
+    
+    if estado_filtro:
+        cuentas = cuentas.filter(estado=estado_filtro)
+    
+    # Calcular totales pendientes generales
+    total_deuda = sum(c.saldo_pendiente for c in cuentas.filter(estado__in=['PENDIENTE', 'PARCIAL']))
+        
+    paginator = Paginator(cuentas, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'estado_filtro': estado_filtro,
+        'total_deuda': total_deuda,
+    }
+    return render(request, 'inventario/lista_cuentas_pagar.html', context)
+
+@login_required
+def detalle_cuenta_pagar(request, cuenta_id):
+    """Ver saldo, historial y registrar abonos a una cuenta"""
+    if not es_staff_inventario(request.user):
+        messages.error(request, 'No tienes permiso.')
+        return redirect('dashboard')
+        
+    cuenta = get_object_or_404(CuentaProveedor, id=cuenta_id)
+    pagos = cuenta.pagos.all().order_by('-fecha_pago')
+    
+    if request.method == 'POST':
+        if cuenta.estado == 'PAGADO':
+            messages.warning(request, 'Esta cuenta ya está totalmente pagada.')
+        else:
+            form = PagoProveedorForm(request.POST)
+            if form.is_valid():
+                pago = form.save(commit=False)
+                # Validar que no pague de más
+                if pago.monto > cuenta.saldo_pendiente:
+                    messages.error(request, f'El monto ingresado (Q{pago.monto}) supera el saldo pendiente (Q{cuenta.saldo_pendiente}).')
+                else:
+                    pago.cuenta = cuenta
+                    pago.registrado_por = request.user
+                    pago.save() # save() interviene actualizando saldo
+                    messages.success(request, f'Abono de Q{pago.monto} registrado exitosamente.')
+                    return redirect('detalle_cuenta_pagar', cuenta_id=cuenta.id)
+    else:
+        form = PagoProveedorForm()
+        
+    context = {
+        'cuenta': cuenta,
+        'pagos': pagos,
+        'form': form,
+    }
+    return render(request, 'inventario/detalle_cuenta_pagar.html', context)
+
+# ============= CATÁLOGO COMPARATIVO DE PRECIOS =============
+
+@login_required
+def catalogo_precios(request):
+    """Muestra el catálogo comparativo de proveedores y precios"""
+    if not es_staff_inventario(request.user):
+        messages.error(request, 'No tienes permiso para acceder a esta sección.')
+        return redirect('dashboard')
+        
+    q = request.GET.get('q', '')
+    
+    # Filtrar productos que tengan al menos 1 precio de proveedor, haciendo prefetch de precios ordenados
+    from django.db.models import Prefetch
+    precios_ordenados = PrecioProveedor.objects.select_related('proveedor').order_by('precio_ofrecido')
+    
+    productos = Producto.objects.filter(
+        precios_proveedores__isnull=False
+    ).prefetch_related(
+        Prefetch('precios_proveedores', queryset=precios_ordenados, to_attr='precios_ordenados')
+    ).distinct()
+    
+    if q:
+        productos = productos.filter(Q(nombre__icontains=q) | Q(codigo__icontains=q))
+        
+    paginator = Paginator(productos, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'inventario/catalogo_precios.html', {'page_obj': page_obj, 'q': q})

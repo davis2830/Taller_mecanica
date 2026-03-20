@@ -22,6 +22,19 @@ urlpatterns = [
     path('proveedores/agregar/', views.agregar_proveedor, name='agregar_proveedor'),
     path('proveedores/<int:proveedor_id>/editar/', views.editar_proveedor, name='editar_proveedor'),
     
+    # Órdenes de Compra
+    path('ordenes-compra/', views.lista_ordenes_compra, name='lista_ordenes_compra'),
+    path('ordenes-compra/crear/', views.crear_orden_compra, name='crear_orden_compra'),
+    path('ordenes-compra/<int:orden_id>/', views.ver_orden_compra, name='ver_orden_compra'),
+    path('ordenes-compra/<int:orden_id>/recibir/', views.recibir_orden_compra, name='recibir_orden_compra'),
+    
+    # Cuentas por Pagar
+    path('cuentas-pagar/', views.lista_cuentas_pagar, name='lista_cuentas_pagar'),
+    path('cuentas-pagar/<int:cuenta_id>/', views.detalle_cuenta_pagar, name='detalle_cuenta_pagar'),
+    
+    # Catálogo Comparativo de Precios
+    path('catalogo-precios/', views.catalogo_precios, name='catalogo_precios'),
+    
     # Categorías
     path('categorias/', views.lista_categorias, name='lista_categorias'),
     path('categorias/agregar/', views.agregar_categoria, name='agregar_categoria'),

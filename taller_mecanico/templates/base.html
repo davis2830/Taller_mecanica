@@ -698,7 +698,7 @@
                     <i class="fas fa-circle-dot fa-xs"></i> Nueva Cita
                 </a>
                 <a class="sidebar-submenu-link" href="{% url 'lista_vehiculos' %}">
-                    <i class="fas fa-circle-dot fa-xs"></i> Mis Vehículos
+                    <i class="fas fa-circle-dot fa-xs"></i> Directorio y Clínica
                 </a>
                 {% if user.is_superuser or user.perfil.rol.nombre == 'Administrador' or user.perfil.rol.nombre == 'Recepcionista' %}
                 <a class="sidebar-submenu-link" href="{% url 'calendario_citas' %}">
@@ -727,9 +727,6 @@
                 <a class="sidebar-submenu-link" href="{% url 'agregar_movimiento' %}">
                     <i class="fas fa-circle-dot fa-xs"></i> Movimientos
                 </a>
-                <a class="sidebar-submenu-link" href="{% url 'lista_proveedores' %}">
-                    <i class="fas fa-circle-dot fa-xs"></i> Proveedores
-                </a>
                 <a class="sidebar-submenu-link" href="{% url 'lista_categorias' %}">
                     <i class="fas fa-circle-dot fa-xs"></i> Categorías
                 </a>
@@ -741,6 +738,27 @@
                 </a>
                 <a class="sidebar-submenu-link" href="{% url 'reporte_valorizado' %}">
                     <i class="fas fa-circle-dot fa-xs"></i> Valorizado
+                </a>
+            </div>
+
+            <!-- ── Proveedores ── -->
+            <button class="sidebar-toggle-btn" data-target="sub-proveedores" id="btn-proveedores" type="button">
+                <span class="sl-icon"><i class="fas fa-handshake"></i></span>
+                <span class="sl-label">Proveedores</span>
+                <i class="fas fa-chevron-down sl-caret"></i>
+            </button>
+            <div class="sidebar-submenu" id="sub-proveedores">
+                <a class="sidebar-submenu-link" href="{% url 'lista_proveedores' %}">
+                    <i class="fas fa-circle-dot fa-xs"></i> Lista de Proveedores
+                </a>
+                <a class="sidebar-submenu-link" href="{% url 'lista_ordenes_compra' %}">
+                    <i class="fas fa-circle-dot fa-xs"></i> Órdenes de Compra
+                </a>
+                <a class="sidebar-submenu-link" href="{% url 'lista_cuentas_pagar' %}">
+                    <i class="fas fa-circle-dot fa-xs"></i> Cuentas por Pagar
+                </a>
+                <a class="sidebar-submenu-link" href="{% url 'catalogo_precios' %}">
+                    <i class="fas fa-circle-dot fa-xs"></i> Catálogo de Precios
                 </a>
             </div>
             {% endif %}

@@ -2,8 +2,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import Vehiculo, Cita, TipoServicio, Notificacion
-from .forms import VehiculoForm, CitaForm, FechaHoraDisponibleForm, GestionCitaForm
+from .models import Vehiculo, Cita, TipoServicio, Notificacion, RecepcionVehiculo
+from .forms import VehiculoForm, CitaForm, FechaHoraDisponibleForm, GestionCitaForm, RecepcionVehiculoForm
 from django.utils import timezone
 import datetime
 from django.core.mail import send_mail
@@ -446,6 +446,84 @@ def eliminar_servicio(request, servicio_id):
     if request.method == 'POST':
         servicio.delete()
         messages.success(request, 'Servicio eliminado correctamente.')
-        return redirect('lista_servicios')
-    
     return render(request, 'citas/eliminar_servicio.html', {'servicio': servicio})
+
+# =======================================================================
+# HOJA DE RECEPCIÓN (CHECK-IN) E HISTORIAL CLÍNICO
+# =======================================================================
+
+@login_required
+def nueva_recepcion(request, vehiculo_id=None, cita_id=None):
+    """Vista para crear una nueva Boleta de Recepción (Check-in)"""
+    if not es_staff(request.user):
+        messages.error(request, 'No tienes permiso para acceder a esta sección.')
+        return redirect('dashboard')
+        
+    initial_data = {}
+    vehiculo_obj = None
+    cita_obj = None
+    
+    if vehiculo_id:
+        vehiculo_obj = get_object_or_404(Vehiculo, id=vehiculo_id)
+        initial_data['vehiculo'] = vehiculo_obj
+        
+    if cita_id:
+        cita_obj = get_object_or_404(Cita, id=cita_id)
+        initial_data['cita'] = cita_obj
+        if not vehiculo_obj and cita_obj.vehiculo:
+            initial_data['vehiculo'] = cita_obj.vehiculo
+            vehiculo_obj = cita_obj.vehiculo
+
+    if request.method == 'POST':
+        form = RecepcionVehiculoForm(request.POST)
+        if form.is_valid():
+            recepcion = form.save(commit=False)
+            recepcion.recibido_por = request.user
+            recepcion.save()
+            messages.success(request, 'Vehículo recibido y boleta creada con éxito.')
+            # Redirigir a la vista de impresión o detalle de esta recepción
+            return redirect('boleta_ingreso_pdf', recepcion_id=recepcion.id)
+    else:
+        form = RecepcionVehiculoForm(initial=initial_data)
+        
+    context = {
+        'form': form,
+        'vehiculo': vehiculo_obj,
+        'cita': cita_obj
+    }
+    return render(request, 'citas/nueva_recepcion.html', context)
+
+@login_required
+def historial_vehiculo(request, vehiculo_id):
+    """Ver la clínica y listado histórico de intervenciones de un vehículo"""
+    vehiculo = get_object_or_404(Vehiculo, id=vehiculo_id)
+    
+    # Validar permisos: Dueño o staff
+    if vehiculo.propietario != request.user and not es_staff(request.user):
+        messages.error(request, 'No tienes permiso para ver este vehículo.')
+        return redirect('dashboard')
+        
+    # Obtener recepciones (Ingresos al taller)
+    recepciones = vehiculo.recepciones.all().order_by('-fecha_ingreso')
+    
+    # Obtener citas pasadas del carro
+    citas_historicas = vehiculo.citas.filter(estado__in=['COMPLETADA']).order_by('-fecha')
+    
+    context = {
+        'vehiculo': vehiculo,
+        'recepciones': recepciones,
+        'citas_historicas': citas_historicas,
+    }
+    return render(request, 'citas/historial_vehiculo.html', context)
+
+@login_required
+def boleta_ingreso_pdf(request, recepcion_id):
+    """Vista diseñada para ser impresa físicamente o mostrada en pantalla para firma"""
+    recepcion = get_object_or_404(RecepcionVehiculo, id=recepcion_id)
+    
+    # Validar permisos: Dueño o staff
+    if recepcion.vehiculo.propietario != request.user and not es_staff(request.user):
+        messages.error(request, 'No tienes permiso.')
+        return redirect('dashboard')
+        
+    return render(request, 'citas/boleta_ingreso_pdf.html', {'recepcion': recepcion})

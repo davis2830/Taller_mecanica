@@ -32,8 +32,9 @@
                             <td>{{ vehiculo.placa }}</td>
                             <td>{{ vehiculo.color }}</td>
                             <td>
-                                <a href="{% url 'editar_vehiculo' vehiculo.id %}" class="btn btn-sm btn-info">Editar</a>
-                                <a href="{% url 'eliminar_vehiculo' vehiculo.id %}" class="btn btn-sm btn-danger">Eliminar</a>
+                                <a href="{% url 'historial_vehiculo' vehiculo.id %}" class="btn btn-sm btn-primary" title="Historia Clínica"><i class="fas fa-file-medical"></i> Historial</a>
+                                <a href="{% url 'editar_vehiculo' vehiculo.id %}" class="btn btn-sm btn-info" title="Editar"><i class="fas fa-edit"></i></a>
+                                <a href="{% url 'eliminar_vehiculo' vehiculo.id %}" class="btn btn-sm btn-danger" title="Eliminar"><i class="fas fa-trash"></i></a>
                             </td>
                         </tr>
                         {% endfor %}

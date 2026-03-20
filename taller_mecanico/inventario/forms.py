@@ -2,7 +2,7 @@
 from django import forms
 from .models import (
     Proveedor, Producto, CategoriaProducto, MovimientoInventario, 
-    OrdenCompra, DetalleOrdenCompra, ProductoServicio
+    OrdenCompra, DetalleOrdenCompra, ProductoServicio, PagoProveedor
 )
 from citas.models import TipoServicio
 
@@ -85,9 +85,9 @@ class BusquedaProductoForm(forms.Form):
 class OrdenCompraForm(forms.ModelForm):
     class Meta:
         model = OrdenCompra
-        fields = ['proveedor', 'fecha_entrega_estimada', 'observaciones']
+        fields = ['proveedor', 'fecha_esperada', 'observaciones']
         widgets = {
-            'fecha_entrega_estimada': forms.DateInput(attrs={'type': 'date'}),
+            'fecha_esperada': forms.DateInput(attrs={'type': 'date'}),
             'observaciones': forms.Textarea(attrs={'rows': 3}),
         }
     
@@ -98,7 +98,7 @@ class OrdenCompraForm(forms.ModelForm):
 class DetalleOrdenCompraForm(forms.ModelForm):
     class Meta:
         model = DetalleOrdenCompra
-        fields = ['producto', 'cantidad', 'precio_unitario']
+        fields = ['producto', 'cantidad_solicitada', 'precio_unitario']
         widgets = {
             'precio_unitario': forms.NumberInput(attrs={'step': '0.01'}),
         }
@@ -106,6 +106,14 @@ class DetalleOrdenCompraForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['producto'].queryset = Producto.objects.filter(activo=True)
+
+DetalleOrdenCompraFormSet = forms.inlineformset_factory(
+    OrdenCompra,
+    DetalleOrdenCompra,
+    form=DetalleOrdenCompraForm,
+    extra=1,
+    can_delete=True
+)
 
 class ProductoServicioForm(forms.ModelForm):
     class Meta:
@@ -133,3 +141,11 @@ class AjusteInventarioForm(forms.Form):
             'class': 'form-control'
         })
     )
+
+class PagoProveedorForm(forms.ModelForm):
+    class Meta:
+        model = PagoProveedor
+        fields = ['monto', 'metodo_pago', 'referencia']
+        widgets = {
+            'monto': forms.NumberInput(attrs={'step': '0.01'}),
+        }

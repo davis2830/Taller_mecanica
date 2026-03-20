@@ -123,53 +123,6 @@ class ProductoServicio(models.Model):
         unique_together = ['servicio', 'producto']
         verbose_name_plural = "Productos por Servicio"
 
-class OrdenCompra(models.Model):
-    ESTADOS = (
-        ('BORRADOR', 'Borrador'),
-        ('ENVIADA', 'Enviada'),
-        ('RECIBIDA', 'Recibida'),
-        ('CANCELADA', 'Cancelada'),
-    )
-    
-    numero = models.CharField(max_length=20, unique=True)
-    proveedor = models.ForeignKey(Proveedor, on_delete=models.CASCADE)
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_entrega_estimada = models.DateField(null=True, blank=True)
-    estado = models.CharField(max_length=10, choices=ESTADOS, default='BORRADOR')
-    observaciones = models.TextField(blank=True, null=True)
-    creada_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    
-    def __str__(self):
-        return f"OC-{self.numero} - {self.proveedor.nombre}"
-    
-    def calcular_total(self):
-        total = sum([detalle.subtotal for detalle in self.detalles.all()])
-        self.total = total
-        self.save()
-        return total
-    
-    class Meta:
-        ordering = ['-fecha_creacion']
-
-class DetalleOrdenCompra(models.Model):
-    orden = models.ForeignKey(OrdenCompra, on_delete=models.CASCADE, related_name='detalles')
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
-    cantidad = models.PositiveIntegerField()
-    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
-    
-    @property
-    def subtotal(self):
-        return self.cantidad * self.precio_unitario
-    
-    def __str__(self):
-        return f"{self.orden.numero} - {self.producto.nombre}"
-    
-    class Meta:
-        unique_together = ['orden', 'producto']
-
-# inventario/models.py (actualizar la clase AlertaInventario)
-
 class AlertaInventario(models.Model):
     TIPOS = (
         ('STOCK_BAJO', 'Stock Bajo'),
@@ -228,3 +181,154 @@ class AlertaInventario(models.Model):
     class Meta:
         ordering = ['-fecha_creacion']
         verbose_name_plural = "Alertas de Inventario"
+
+# ═══════════════════════════════════════════
+#   ÓRDENES DE COMPRA
+# ═══════════════════════════════════════════
+
+class OrdenCompra(models.Model):
+    ESTADOS = (
+        ('BORRADOR', 'Borrador'),
+        ('SOLICITADA', 'Solicitada al Proveedor'),
+        ('PARCIAL', 'Recibida Parcialmente'),
+        ('COMPLETA', 'Recibida Completa'),
+        ('CANCELADA', 'Cancelada'),
+    )
+    
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.RESTRICT, related_name='ordenes')
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='BORRADOR')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_esperada = models.DateField(null=True, blank=True)
+    fecha_recepcion = models.DateTimeField(null=True, blank=True)
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    observaciones = models.TextField(blank=True, null=True)
+    creada_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='ordenes_compra_creadas')
+    
+    def __str__(self):
+        return f"OC-{self.id:04d} - {self.proveedor.nombre}"
+        
+    def recalcular_total(self):
+        total = sum([detalle.subtotal for detalle in self.detalles.all()])
+        self.total = total
+        self.save()
+
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = "Orden de Compra"
+        verbose_name_plural = "Órdenes de Compra"
+
+class DetalleOrdenCompra(models.Model):
+    orden = models.ForeignKey(OrdenCompra, on_delete=models.CASCADE, related_name='detalles')
+    producto = models.ForeignKey(Producto, on_delete=models.RESTRICT)
+    cantidad_solicitada = models.PositiveIntegerField(default=1)
+    cantidad_recibida = models.PositiveIntegerField(default=0)
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    def save(self, *args, **kwargs):
+        self.subtotal = self.cantidad_solicitada * self.precio_unitario
+        super().save(*args, **kwargs)
+        
+    def __str__(self):
+        return f"{self.producto.nombre} (x{self.cantidad_solicitada})"
+        
+    class Meta:
+        verbose_name = "Detalle de Orden"
+        verbose_name_plural = "Detalles de Órdenes"
+
+# ═══════════════════════════════════════════
+#   CUENTAS POR PAGAR (PROVEEDORES)
+# ═══════════════════════════════════════════
+
+class CuentaProveedor(models.Model):
+    ESTADOS = (
+        ('PENDIENTE', 'Pendiente de Pago'),
+        ('PARCIAL', 'Abono Parcial'),
+        ('PAGADO', 'Pagado Totalmente'),
+        ('CANCELADO', 'Cancelada/Anulada'),
+    )
+
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.RESTRICT, related_name='cuentas')
+    orden_compra = models.OneToOneField(OrdenCompra, on_delete=models.SET_NULL, null=True, blank=True, related_name='cuenta_pagar')
+    fecha_emision = models.DateTimeField(auto_now_add=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
+    
+    monto_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    monto_pagado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='PENDIENTE')
+    
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Cuenta {self.id:05d} - {self.proveedor.nombre}"
+
+    @property
+    def saldo_pendiente(self):
+        return self.monto_total - self.monto_pagado
+
+    def actualizar_saldos(self):
+        # Sumar los pagos activos
+        total_pagos = sum(pago.monto for pago in self.pagos.all())
+        self.monto_pagado = total_pagos
+        
+        if self.monto_pagado >= self.monto_total:
+            self.estado = 'PAGADO'
+        elif self.monto_pagado > 0:
+            self.estado = 'PARCIAL'
+        else:
+            self.estado = 'PENDIENTE'
+            
+        self.save()
+
+    class Meta:
+        ordering = ['-fecha_emision']
+        verbose_name = "Cuenta por Pagar"
+        verbose_name_plural = "Cuentas por Pagar"
+
+class PagoProveedor(models.Model):
+    METODOS = (
+        ('EFECTIVO', 'Efectivo'),
+        ('TRANSFERENCIA', 'Transferencia Bancaria'),
+        ('CHEQUE', 'Cheque'),
+        ('TARJETA', 'Tarjeta'),
+        ('OTRO', 'Otro'),
+    )
+
+    cuenta = models.ForeignKey(CuentaProveedor, on_delete=models.CASCADE, related_name='pagos')
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    fecha_pago = models.DateTimeField(auto_now_add=True)
+    metodo_pago = models.CharField(max_length=20, choices=METODOS, default='EFECTIVO')
+    referencia = models.CharField(max_length=100, blank=True, null=True, help_text="Nro de cheque o transferencia")
+    registrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+
+    def __str__(self):
+        return f"Pago de {self.monto} a {self.cuenta.proveedor.nombre}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Después de guardar un abono, actualizar el estado y saldo de la cuenta padre
+        self.cuenta.actualizar_saldos()
+
+# ═══════════════════════════════════════════
+#   CATÁLOGO DE PRECIOS E HISTORIAL
+# ═══════════════════════════════════════════
+
+class PrecioProveedor(models.Model):
+    """
+    Guarda la relación entre un Proveedor, un Producto específico y 
+    a qué precio (Q) y fecha nos lo vendió. Útil para el cotizador comparativo.
+    """
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.CASCADE, related_name='precios_ofrecidos')
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='precios_proveedores')
+    precio_ofrecido = models.DecimalField(max_digits=10, decimal_places=2)
+    ultima_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # No puede haber 2 registros del mismo proveedor y el mismo producto a la vez
+        unique_together = ['proveedor', 'producto']
+        ordering = ['producto', 'precio_ofrecido']
+        verbose_name = "Precio de Proveedor"
+        verbose_name_plural = "Precios de Proveedores"
+
+    def __str__(self):
+        return f"{self.producto.nombre} en {self.proveedor.nombre} (Q{self.precio_ofrecido})"

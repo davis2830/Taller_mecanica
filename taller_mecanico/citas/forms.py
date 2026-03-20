@@ -93,3 +93,28 @@ class GestionCitaForm(forms.ModelForm):
             self.fields['atendida_por'].queryset = User.objects.filter(id__in=mecanicos)
         except:
             self.fields['atendida_por'].queryset = User.objects.filter(is_staff=True)
+
+class RecepcionVehiculoForm(forms.ModelForm):
+    class Meta:
+        from .models import RecepcionVehiculo
+        model = RecepcionVehiculo
+        fields = [
+            'vehiculo', 'kilometraje', 'nivel_gasolina',
+            'motivo_ingreso', 'diagnostico_inicial', 'danos_previos',
+            'tiene_llanta_repuesto', 'tiene_gata_herramientas',
+            'tiene_radio', 'tiene_documentos', 'otros_objetos',
+            'firma_cliente_text'
+        ]
+        widgets = {
+            'motivo_ingreso': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Ej. Ruido en el motor al acelerar'}),
+            'diagnostico_inicial': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Ej. Fuga de aceite visible cerca del carter'}),
+            'danos_previos': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Ej. Rayón en puerta derecha, faro izquierdo roto'}),
+            'otros_objetos': forms.TextInput(attrs={'placeholder': 'Ej. Lentes, cargador de celular, documentos importantes'}),
+            'firma_cliente_text': forms.TextInput(attrs={'placeholder': 'Escriba el nombre completo del cliente que entrega el vehículo'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super(RecepcionVehiculoForm, self).__init__(*args, **kwargs)
+        # Opcional: Hacer que algunos campos booleanos tengan el estilo de un checkbox bonito (Bootstrap custom-switch)
+        for field in ['tiene_llanta_repuesto', 'tiene_gata_herramientas', 'tiene_radio', 'tiene_documentos']:
+            self.fields[field].widget.attrs.update({'class': 'custom-control-input'})
