@@ -134,7 +134,12 @@ def asignar_rol(request, user_id):
 
 @login_required
 def dashboard(request):
-    # Verificar y crear el perfil si no existe
+    from django.utils import timezone
+    from django.db.models import Count, Sum, Q, F
+    from citas.models import Cita, Vehiculo, TipoServicio
+    from inventario.models import Producto, AlertaInventario, MovimientoInventario
+
+    # ─── Perfil ───
     try:
         perfil = request.user.perfil
     except Perfil.DoesNotExist:
@@ -146,9 +151,83 @@ def dashboard(request):
             usuario=request.user,
             rol=rol_cliente
         )
-    
+
+    hoy = timezone.localdate()
+    es_staff = (
+        request.user.is_superuser
+        or (hasattr(request.user, 'perfil') and request.user.perfil.rol
+            and request.user.perfil.rol.nombre in ['Administrador', 'Recepcionista', 'Mecánico'])
+    )
+
+    # ─── Citas ───
+    if es_staff:
+        citas_hoy        = Cita.objects.filter(fecha=hoy).count()
+        citas_pendientes = Cita.objects.filter(estado='PENDIENTE').count()
+        citas_confirmadas= Cita.objects.filter(estado='CONFIRMADA').count()
+        citas_completadas_hoy = Cita.objects.filter(fecha=hoy, estado='COMPLETADA').count()
+        proximas_citas   = Cita.objects.filter(
+            fecha__gte=hoy, estado__in=['PENDIENTE', 'CONFIRMADA']
+        ).select_related('cliente', 'vehiculo', 'servicio').order_by('fecha', 'hora_inicio')[:5]
+    else:
+        citas_hoy        = Cita.objects.filter(fecha=hoy, cliente=request.user).count()
+        citas_pendientes = Cita.objects.filter(cliente=request.user, estado='PENDIENTE').count()
+        citas_confirmadas= Cita.objects.filter(cliente=request.user, estado='CONFIRMADA').count()
+        citas_completadas_hoy = Cita.objects.filter(fecha=hoy, cliente=request.user, estado='COMPLETADA').count()
+        proximas_citas   = Cita.objects.filter(
+            cliente=request.user, fecha__gte=hoy, estado__in=['PENDIENTE', 'CONFIRMADA']
+        ).select_related('vehiculo', 'servicio').order_by('fecha', 'hora_inicio')[:5]
+
+    # ─── Vehículos ───
+    mis_vehiculos = Vehiculo.objects.filter(propietario=request.user).count()
+
+    # ─── Inventario (solo staff) ───
+    total_productos    = 0
+    productos_stock_bajo = 0
+    alertas_activas    = 0
+    ultimos_movimientos = []
+    total_usuarios     = 0
+    total_roles        = 0
+    total_servicios    = 0
+
+    if es_staff:
+        total_productos      = Producto.objects.filter(activo=True).count()
+        productos_stock_bajo = Producto.objects.filter(
+            activo=True, stock_actual__lte=F('stock_minimo')
+        ).count()
+        alertas_activas      = AlertaInventario.objects.filter(activa=True).count()
+        ultimos_movimientos  = MovimientoInventario.objects.select_related(
+            'producto', 'usuario'
+        ).order_by('-fecha')[:6]
+
+        if (request.user.is_superuser
+                or (hasattr(request.user, 'perfil') and request.user.perfil.rol
+                    and request.user.perfil.rol.nombre == 'Administrador')):
+            total_usuarios  = User.objects.count()
+            total_roles     = Rol.objects.count()
+
+        total_servicios = TipoServicio.objects.count()
+
     context = {
         'title': 'Dashboard',
+        # Citas
+        'citas_hoy':            citas_hoy,
+        'citas_pendientes':     citas_pendientes,
+        'citas_confirmadas':    citas_confirmadas,
+        'citas_completadas_hoy': citas_completadas_hoy,
+        'proximas_citas':       proximas_citas,
+        # Vehículos
+        'mis_vehiculos':        mis_vehiculos,
+        # Inventario
+        'total_productos':      total_productos,
+        'productos_stock_bajo': productos_stock_bajo,
+        'alertas_activas':      alertas_activas,
+        'ultimos_movimientos':  ultimos_movimientos,
+        # Admin
+        'total_usuarios':       total_usuarios,
+        'total_roles':          total_roles,
+        'total_servicios':      total_servicios,
+        # Flags
+        'es_staff':             es_staff,
     }
     return render(request, 'usuarios/dashboard.html', context)
 
