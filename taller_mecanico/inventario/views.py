@@ -56,7 +56,7 @@ def dashboard_inventario(request):
     productos_mas_usados = MovimientoInventario.objects.filter(
         tipo='SALIDA',
         fecha__gte=fecha_limite
-    ).values('producto__nombre').annotate(
+    ).values('producto__id', 'producto__nombre').annotate(
         total_usado=Sum('cantidad')
     ).order_by('-total_usado')[:5]
     

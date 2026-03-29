@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 import json
+from django.db import transaction
 from .models import OrdenTrabajo, OrdenRepuesto
 from inventario.models import Producto
 from inventario.models import MovimientoInventario
@@ -13,7 +14,10 @@ def es_mecanico_o_admin(user):
 @login_required
 @user_passes_test(es_mecanico_o_admin)
 def tablero_kanban(request):
-    ordenes = OrdenTrabajo.objects.all().order_by('-fecha_creacion')
+    # Excluir tarjetas de citas canceladas, completadas o huérfanas
+    ordenes = OrdenTrabajo.objects.exclude(
+        cita__estado__in=['CANCELADA', 'COMPLETADA', 'PENDIENTE']
+    ).order_by('-fecha_creacion')
     
     # Agrupar órdenes por estado
     columnas = {
@@ -27,11 +31,16 @@ def tablero_kanban(request):
 
 @login_required
 @user_passes_test(es_mecanico_o_admin)
+@transaction.atomic
 def detalle_orden(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
     repuestos = orden.repuestos.select_related('producto')
     
     if request.method == 'POST':
+        # Bloquear modificaciones si la orden o cita están terminadas
+        if orden.estado in ['ENTREGADO', 'CANCELADO'] or (hasattr(orden, 'cita') and orden.cita and orden.cita.estado in ['CANCELADA', 'COMPLETADA']):
+            return redirect('detalle_orden', orden_id=orden.id)
+
         if 'guardar_diagnostico' in request.POST:
             orden.diagnostico = request.POST.get('diagnostico', '')
             orden.save()
@@ -75,16 +84,23 @@ def detalle_orden(request, orden_id):
     # Para el buscador de productos
     productos_disponibles = Producto.objects.filter(activo=True).order_by('nombre')
     
+    # Determinar si la orden está bloqueada por finalización o cancelación
+    es_lectura_solo = False
+    if orden.estado in ['ENTREGADO', 'CANCELADO'] or (hasattr(orden, 'cita') and orden.cita and orden.cita.estado in ['CANCELADA', 'COMPLETADA']):
+        es_lectura_solo = True
+    
     context = {
         'orden': orden,
         'repuestos': repuestos,
         'productos': productos_disponibles,
+        'es_lectura_solo': es_lectura_solo,
     }
     return render(request, 'taller/detalle_orden.html', context)
 
 @login_required
 @user_passes_test(es_mecanico_o_admin)
 @require_POST
+@transaction.atomic
 def actualizar_estado_orden(request):
     try:
         data = json.loads(request.body)
@@ -97,6 +113,11 @@ def actualizar_estado_orden(request):
             return JsonResponse({'success': False, 'error': 'Estado inválido'})
             
         orden = get_object_or_404(OrdenTrabajo, id=orden_id)
+        
+        # Blindaje Anti-Bug: No mover si la cita matriz fue cancelada
+        if hasattr(orden, 'cita') and orden.cita and orden.cita.estado in ['CANCELADA', 'COMPLETADA']:
+            return JsonResponse({'success': False, 'error': f'Movimiento bloqueado: La cita se encuentra {orden.cita.estado}.'})
+
         orden.estado = nuevo_estado
         orden.save()
         
@@ -108,10 +129,16 @@ def actualizar_estado_orden(request):
 @login_required
 @user_passes_test(es_mecanico_o_admin)
 @require_POST
+@transaction.atomic
 def eliminar_repuesto_orden(request, repuesto_id):
     repuesto_orden = get_object_or_404(OrdenRepuesto, id=repuesto_id)
-    orden_id = repuesto_orden.orden.id
+    orden = repuesto_orden.orden
+    orden_id = orden.id
     
+    # Bloquear devoluciones si la cita orden está bloqueada
+    if orden.estado in ['ENTREGADO', 'CANCELADO'] or (hasattr(orden, 'cita') and orden.cita and orden.cita.estado in ['CANCELADA', 'COMPLETADA']):
+        return redirect('detalle_orden', orden_id=orden_id)
+
     # Devolver stock al inventario
     producto = repuesto_orden.producto
     producto.stock_actual += repuesto_orden.cantidad
@@ -136,6 +163,7 @@ def eliminar_repuesto_orden(request, repuesto_id):
 
 @login_required
 @user_passes_test(es_mecanico_o_admin)
+@transaction.atomic
 def crear_orden_desde_cita(request, cita_id):
     from citas.models import Cita
     cita = get_object_or_404(Cita, id=cita_id)

@@ -11,6 +11,7 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Q
+from django.db import transaction
 from usuarios.models import Perfil
 
 def es_staff(user):
@@ -346,6 +347,7 @@ def detalle_cita(request, cita_id):
     return render(request, 'citas/detalle_cita.html', {'cita': cita})
 
 @login_required
+@transaction.atomic
 def cancelar_cita(request, cita_id):
     """Vista para cancelar una cita"""
     cita = get_object_or_404(Cita, id=cita_id)
@@ -417,6 +419,7 @@ def calendario_citas(request):
     })
 
 @login_required
+@transaction.atomic
 def gestionar_cita(request, cita_id):
     """Vista para que el personal gestione una cita"""
     if not es_staff(request.user):
