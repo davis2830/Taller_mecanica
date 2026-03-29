@@ -11,21 +11,43 @@
         <a href="{% url 'agregar_producto' %}" class="btn btn-light text-primary font-weight-bold shadow-sm rounded-pill px-4 py-2 hover-lift">            <i class="fas fa-plus mr-2"></i>Nuevo Producto        </a>    </div>
         
 <div class="card-body p-4">        <!-- Búsqueda y Filtros -->        
-<div class="filter-container">            
-<form method="GET" class="mb-0">                
-<div class="row align-items-end">                    
-<div class="col-md-4 mb-3 mb-md-0">                        <label class="font-weight-bold text-muted small text-uppercase mb-2"><i class="fas fa-search mr-1"></i> Buscar producto</label>                        {{ form.busqueda }}                    </div>
-                    
-<div class="col-md-2 mb-3 mb-md-0">                        <label class="font-weight-bold text-muted small text-uppercase mb-2"><i class="fas fa-filter mr-1"></i> Tipo</label>                        {{ form.tipo }}                    </div>
-                    
-<div class="col-md-3 mb-3 mb-md-0">                        <label class="font-weight-bold text-muted small text-uppercase mb-2"><i class="fas fa-tags mr-1"></i> Categoría</label>                        {{ form.categoria }}                    </div>
-                    
-<div class="col-md-3 d-flex justify-content-md-end">                        
-<div class="custom-control custom-switch mr-3 align-self-center">                            {{ form.solo_stock_bajo }}                            <label class="custom-control-label font-weight-bold text-danger" for="{{ form.solo_stock_bajo.id_for_label }}">Solo stock bajo</label>                        </div>
-                        
-<button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm"><i class="fas fa-search"></i></button>                        <a href="{% url 'lista_productos' %}" class="btn btn-outline-secondary rounded-pill px-3 ml-2" title="Limpiar"><i class="fas fa-times"></i></a>                    </div>
-                </div>
-            </form>        </div>
+<div class="filter-container">
+<form method="GET" class="mb-0">
+<div class="d-flex flex-wrap align-items-end" style="gap: 12px;">
+
+    <div class="flex-grow-1" style="min-width: 160px; max-width: 260px;">
+        <label class="font-weight-bold text-muted small text-uppercase mb-1 d-block"><i class="fas fa-search mr-1"></i> Buscar</label>
+        {{ form.busqueda }}
+    </div>
+
+    <div style="min-width: 110px; max-width: 150px;">
+        <label class="font-weight-bold text-muted small text-uppercase mb-1 d-block"><i class="fas fa-filter mr-1"></i> Tipo</label>
+        {{ form.tipo }}
+    </div>
+
+    <div style="min-width: 150px; max-width: 210px;">
+        <label class="font-weight-bold text-muted small text-uppercase mb-1 d-block"><i class="fas fa-tags mr-1"></i> Categoría</label>
+        {{ form.categoria }}
+    </div>
+
+    <div class="d-flex align-items-center ml-auto" style="gap: 10px;">
+        <div class="custom-control custom-switch m-0">
+            <input type="checkbox" class="custom-control-input" name="solo_stock_bajo" id="id_solo_stock_bajo" {% if form.solo_stock_bajo.value %}checked{% endif %}>
+            <label class="custom-control-label font-weight-bold text-danger m-0" for="id_solo_stock_bajo" style="white-space: nowrap; cursor: pointer; line-height: 1.8;">Solo stock bajo</label>
+        </div>
+
+        <button type="submit" class="btn btn-primary font-weight-bold px-4 shadow-sm" style="border-radius: 20px; height: 42px; white-space: nowrap;">
+            <i class="fas fa-search mr-1"></i> Filtrar
+        </button>
+
+        <a href="{% url 'lista_productos' %}" class="btn btn-light border text-secondary px-3" style="border-radius: 20px; height: 42px; display: flex; align-items: center; justify-content: center;" title="Limpiar Filtros">
+            <i class="fas fa-times"></i>
+        </a>
+    </div>
+
+</div>
+</form>
+</div>
                 <!-- Tabla Principal -->        
 <div class="table-responsive">            
 <table class="table premium-table mb-0">                

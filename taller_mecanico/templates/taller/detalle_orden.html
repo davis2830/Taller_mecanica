@@ -95,8 +95,127 @@
     box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
-/* Lista de repuestos */
-.parts-list { margin: 0; padding: 0; list-style: none; }
+/* Buscador de repuestos premium */
+.search-repuesto {
+    position: relative;
+}
+.search-repuesto input {
+    width: 100%;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 14px 10px 38px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    background: white;
+}
+.search-repuesto input:focus {
+    border-color: var(--info);
+    box-shadow: 0 0 0 4px rgba(59,130,246,0.1);
+    outline: none;
+}
+.search-repuesto .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+}
+.productos-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+    z-index: 1000;
+    max-height: 240px;
+    overflow-y: auto;
+    display: none;
+}
+.producto-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.15s ease;
+}
+.producto-option:last-child { border-bottom: none; }
+.producto-option:hover { background: #f0f9ff; }
+.producto-option.stock-cero { opacity: 0.5; pointer-events: none; }
+.prod-name { font-weight: 600; color: var(--primary); font-size: 0.9rem; }
+.prod-meta { font-size: 0.78rem; color: var(--text-muted); }
+.stock-badge {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 50px;
+    font-weight: 700;
+}
+.stock-ok { background: #ecfdf5; color: #065f46; }
+.stock-low { background: #fef3c7; color: #92400e; }
+.stock-out { background: #fef2f2; color: #991b1b; }
+.qty-controls {
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    width: 100%;
+    overflow: hidden;
+}
+.qty-controls button {
+    background: none;
+    border: none;
+    padding: 8px 14px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary-light);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.qty-controls button:hover { background: #e2e8f0; }
+.qty-controls input {
+    border: none;
+    border-left: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1rem;
+    width: 55px;
+    padding: 8px 4px;
+    background: white;
+}
+.qty-controls input:focus { outline: none; }
+.selected-product-preview {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: #1e40af;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+/* Owner tag en el header */
+.owner-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 50px;
+    padding: 4px 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-top: 10px;
+}
 .part-item {
     display: flex;
     justify-content: space-between;
@@ -126,12 +245,26 @@
     border: 1px dashed #cbd5e1;
 }
 
+.financial-summary {
+    background: white;
+    padding: 20px;
+    border-top: 1px dashed #cbd5e1;
+}
+.financial-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+    font-size: 1.05rem;
+    font-weight: 500;
+}
+.fin-value { font-weight: 700; color: var(--primary); }
+
 .total-row {
     background: var(--primary);
     color: white;
     padding: 15px 25px;
     display: flex; justify-content: space-between; align-items: center;
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 .total-label { font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 .total-amount { font-size: 1.8rem; font-weight: 800; font-family: 'Oswald', sans-serif; }
@@ -148,6 +281,17 @@
         <div class="order-id">ORDEN #{{ orden.id|stringformat:"05d" }}</div>
         <h1 class="order-car">{{ orden.vehiculo.marca }} {{ orden.vehiculo.modelo }}</h1>
         <div class="order-placa">{{ orden.vehiculo.placa }}</div>
+        {% if orden.cita %}
+        <div class="owner-pill mt-2">
+            <i class="fas fa-user-circle" style="color: var(--info);"></i>
+            <span>{{ orden.cita.cliente.get_full_name|default:orden.cita.cliente.username }}</span>
+        </div>
+        {% elif orden.vehiculo.propietario %}
+        <div class="owner-pill mt-2">
+            <i class="fas fa-user-circle" style="color: var(--info);"></i>
+            <span>{{ orden.vehiculo.propietario.get_full_name|default:orden.vehiculo.propietario.username }}</span>
+        </div>
+        {% endif %}
     </div>
     <div class="text-right">
         <div class="mb-2 text-muted font-weight-bold uppercase" style="font-size: 0.8rem; letter-spacing:1px;">Estado Actual</div>
@@ -249,52 +393,162 @@
                 </div>
                 {% endif %}
                 
-                <!-- Añadir repuesto -->
+                <!-- Añadir repuesto (UI mejorada) -->
                 <div class="add-part-form">
                     <h6 class="font-weight-bold text-primary mb-3"><i class="fas fa-plus-circle mr-1"></i>Agregar Repuesto del Inventario</h6>
-                    <form method="POST" class="row no-gutters align-items-center">
+                    <form method="POST" id="form-agregar-repuesto">
                         {% csrf_token %}
                         <input type="hidden" name="agregar_repuesto" value="1">
-                        
-                        <div class="col-md-7 pr-2 mb-2 mb-md-0">
-                            <select name="producto_id" class="form-control bg-white" required style="width: 100%;">
-                                <option value="">Buscar repuesto...</option>
+                        <input type="hidden" name="producto_id" id="producto_id_hidden">
+
+                        <!-- Preview del seleccionado -->
+                        <div class="selected-product-preview" id="selected-preview">
+                            <i class="fas fa-box"></i>
+                            <span id="preview-text"></span>
+                            <button type="button" onclick="clearSelection()" style="background:none;border:none;margin-left:auto;color:#6b7280;cursor:pointer;"><i class="fas fa-times"></i></button>
+                        </div>
+
+                        <!-- Búsqueda de producto -->
+                        <div class="search-repuesto mb-2" id="search-container">
+                            <i class="fas fa-search search-icon"></i>
+                            <input type="text" id="buscar-producto" placeholder="Buscar repuesto por nombre..." autocomplete="off">
+                            <div class="productos-dropdown" id="productos-dropdown">
                                 {% for prod in productos %}
-                                <option value="{{ prod.id }}">{{ prod.nombre }} (Stock: {{ prod.stock_actual }}) - Q{{ prod.precio_venta }}</option>
+                                <div class="producto-option {% if prod.stock_actual == 0 %}stock-cero{% endif %}"
+                                     data-id="{{ prod.id }}"
+                                     data-nombre="{{ prod.nombre }}"
+                                     data-precio="{{ prod.precio_venta }}"
+                                     data-stock="{{ prod.stock_actual }}">
+                                    <div>
+                                        <div class="prod-name">{{ prod.nombre }}</div>
+                                        <div class="prod-meta">Q{{ prod.precio_venta }} c/u &bull; {{ prod.tipo }}</div>
+                                    </div>
+                                    <div>
+                                        {% if prod.stock_actual == 0 %}
+                                        <span class="stock-badge stock-out">Sin stock</span>
+                                        {% elif prod.stock_actual <= prod.stock_minimo %}
+                                        <span class="stock-badge stock-low">Stock: {{ prod.stock_actual }}</span>
+                                        {% else %}
+                                        <span class="stock-badge stock-ok">{{ prod.stock_actual }} disp.</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
                                 {% endfor %}
-                            </select>
+                            </div>
                         </div>
-                        <div class="col-md-2 pr-2 mb-2 mb-md-0">
-                            <input type="number" name="cantidad" value="1" min="1" class="form-control bg-white text-center" required title="Cantidad">
+
+                        <!-- Control de cantidad -->
+                        <div class="d-flex align-items-center" style="gap: 8px;">
+                            <div class="qty-controls flex-grow-1">
+                                <button type="button" onclick="changeQty(-1)">−</button>
+                                <input type="number" name="cantidad" id="qty-input" value="1" min="1" max="999">
+                                <button type="button" onclick="changeQty(1)">+</button>
+                            </div>
+                            <button type="submit" class="btn btn-success font-weight-bold px-4" id="btn-agregar" style="border-radius:10px; height:44px; white-space:nowrap;" disabled>
+                                <i class="fas fa-plus mr-1"></i>Añadir
+                            </button>
                         </div>
-                        <div class="col-md-3">
-                            <button type="submit" class="btn btn-success font-weight-bold w-100"><i class="fas fa-plus mr-1"></i>Añadir</button>
-                        </div>
+                        <small class="form-text text-muted mt-2"><i class="fas fa-info-circle mr-1"></i>Al agregar, se descontará automáticamente del stock del taller.</small>
                     </form>
-                    <small class="form-text text-muted mt-2"><i class="fas fa-info-circle mr-1"></i>Al agregar, se descontará automáticamente del stock del taller.</small>
                 </div>
             </div>
             
-            <div class="total-row">
-                <span class="total-label">Subtotal Repuestos</span>
-                <span class="total-amount">Q{{ orden.total_repuestos|floatformat:2|intcomma }}</span>
+            <div class="financial-summary">
+                <div class="financial-row">
+                    <span class="fin-label text-muted">Mano de Obra: {{ orden.cita.servicio.nombre|default:'Servicio General' }}</span>
+                    <span class="fin-value">Q{{ orden.cita.servicio.precio|floatformat:2|intcomma|default:'0.00' }}</span>
+                </div>
+                <div class="financial-row">
+                    <span class="fin-label text-muted">Repuestos e Insumos</span>
+                    <span class="fin-value">Q{{ orden.total_repuestos|floatformat:2|intcomma }}</span>
+                </div>
+                <div class="total-row mt-3">
+                    <span class="total-label">Costo Total Neto</span>
+                    <span class="total-amount">Q{{ orden.costo_total|floatformat:2|intcomma }}</span>
+                </div>
             </div>
+            
+            {% if orden.estado == 'CANCELADO' %}
+            <div class="alert alert-danger mx-3 mb-3 d-flex align-items-center mb-0 mt-3" style="border-radius:10px;">
+                <i class="fas fa-ban fa-2x mr-3"></i>
+                <div>
+                    <h6 class="font-weight-bold mb-1">Orden de Trabajo Anulada</h6>
+                    <p class="mb-0 small">La cita original de este servicio fue cancelada por la secretaría.</p>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
 {% block extra_js %}
-<!-- Initialize Select2 if available for better product searching -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-$(document).ready(function() {
-    $('select[name="producto_id"]').select2({
-        placeholder: "Buscar repuesto...",
-        allowClear: true,
-        width: '100%'
+document.addEventListener('DOMContentLoaded', function() {
+    const input = document.getElementById('buscar-producto');
+    const dropdown = document.getElementById('productos-dropdown');
+    const hiddenId = document.getElementById('producto_id_hidden');
+    const btnAgregar = document.getElementById('btn-agregar');
+    const preview = document.getElementById('selected-preview');
+    const previewText = document.getElementById('preview-text');
+    const searchContainer = document.getElementById('search-container');
+    const options = document.querySelectorAll('.producto-option');
+
+    // Mostrar dropdown al escribir
+    input.addEventListener('input', function() {
+        const q = this.value.toLowerCase().trim();
+        let hayVisible = false;
+        options.forEach(opt => {
+            const nombre = opt.dataset.nombre.toLowerCase();
+            const visible = !q || nombre.includes(q);
+            opt.style.display = visible ? 'flex' : 'none';
+            if (visible) hayVisible = true;
+        });
+        dropdown.style.display = hayVisible ? 'block' : 'none';
+    });
+
+    input.addEventListener('focus', function() {
+        if (input.value.trim() === '') {
+            options.forEach(opt => opt.style.display = 'flex');
+        }
+        dropdown.style.display = 'block';
+    });
+
+    // Seleccionar producto
+    options.forEach(opt => {
+        opt.addEventListener('click', function() {
+            if (this.classList.contains('stock-cero')) return;
+            hiddenId.value = this.dataset.id;
+            previewText.textContent = this.dataset.nombre + ' — Q' + parseFloat(this.dataset.precio).toFixed(2) + ' c/u (Stock: ' + this.dataset.stock + ')';
+            preview.style.display = 'flex';
+            searchContainer.style.display = 'none';
+            dropdown.style.display = 'none';
+            btnAgregar.disabled = false;
+        });
+    });
+
+    // Cerrar al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
     });
 });
+
+function changeQty(delta) {
+    const input = document.getElementById('qty-input');
+    let val = parseInt(input.value) || 1;
+    val = Math.max(1, val + delta);
+    input.value = val;
+}
+
+function clearSelection() {
+    document.getElementById('producto_id_hidden').value = '';
+    document.getElementById('selected-preview').style.display = 'none';
+    document.getElementById('search-container').style.display = 'block';
+    document.getElementById('buscar-producto').value = '';
+    document.getElementById('btn-agregar').disabled = true;
+    document.querySelectorAll('.producto-option').forEach(opt => opt.style.display = 'flex');
+}
 </script>
 {% endblock %}
 

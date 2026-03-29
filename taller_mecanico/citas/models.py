@@ -36,6 +36,7 @@ class Cita(models.Model):
     ESTADOS = (
         ('PENDIENTE', 'Pendiente'),
         ('CONFIRMADA', 'Confirmada'),
+        ('LISTO', 'Listo para Recoger'),
         ('COMPLETADA', 'Completada'),
         ('CANCELADA', 'Cancelada'),
     )
@@ -59,9 +60,18 @@ class Cita(models.Model):
     )
     
     def clean(self):
-        # Verificar que la fecha no sea en el pasado
-        if self.fecha < datetime.date.today():
-            raise ValidationError("No se pueden agendar citas en fechas pasadas.")
+        # Verificar que la fecha no sea en el pasado (solo para citas nuevas o si cambian la fecha)
+        if hasattr(self, 'fecha') and self.fecha:
+            if not self.pk:
+                if self.fecha < datetime.date.today():
+                    raise ValidationError("No se pueden agendar nuevas citas en fechas pasadas.")
+            else:
+                try:
+                    original = Cita.objects.get(pk=self.pk)
+                    if self.fecha != original.fecha and self.fecha < datetime.date.today():
+                        raise ValidationError("No se puede mover la cita a una fecha pasada.")
+                except Cita.DoesNotExist:
+                    pass
         
         # Calcular hora_fin basada en la duración del servicio
         if self.hora_inicio and self.servicio:
@@ -88,6 +98,15 @@ class Cita(models.Model):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
+        
+        # Sincronización Reversa: Citas -> Kanban
+        if hasattr(self, 'orden_trabajo') and self.orden_trabajo:
+            if self.estado == 'COMPLETADA' and self.orden_trabajo.estado != 'ENTREGADO':
+                self.orden_trabajo.estado = 'ENTREGADO'
+                self.orden_trabajo.save()
+            elif self.estado == 'CANCELADA' and self.orden_trabajo.estado != 'CANCELADO':
+                self.orden_trabajo.estado = 'CANCELADO'
+                self.orden_trabajo.save()
     
     def __str__(self):
         return f"Cita {self.id} - {self.cliente.username} - {self.fecha} {self.hora_inicio}"

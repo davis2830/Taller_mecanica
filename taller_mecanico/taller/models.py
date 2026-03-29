@@ -9,6 +9,8 @@ class OrdenTrabajo(models.Model):
         ('EN_REVISION', 'En Revisión'),
         ('ESPERANDO_REPUESTOS', 'Esperando Repuestos'),
         ('LISTO', 'Listo para Entrega'),
+        ('ENTREGADO', 'Entregado'),
+        ('CANCELADO', 'Cancelado'),
     ]
 
     cita = models.OneToOneField(Cita, on_delete=models.SET_NULL, null=True, blank=True, related_name='orden_trabajo')
@@ -22,12 +24,32 @@ class OrdenTrabajo(models.Model):
     fecha_actualizacion = models.DateTimeField(auto_now=True)
     fecha_finalizacion = models.DateTimeField(null=True, blank=True)
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Sincronización automática de Citas y Kanban
+        if self.cita:
+            # Si el auto ya está en el taller o bajo revisión, aseguramos que la cita diga CONFIRMADA
+            if self.estado in ['EN_ESPERA', 'EN_REVISION', 'ESPERANDO_REPUESTOS']:
+                if self.cita.estado in ['PENDIENTE', 'COMPLETADA', 'LISTO']:
+                    self.cita.estado = 'CONFIRMADA'
+                    self.cita.save()
+            # Si el mecánico declara en Kanban que está LISTO, cambiar la cita también a LISTO
+            elif self.estado == 'LISTO':
+                if self.cita.estado != 'LISTO':
+                    self.cita.estado = 'LISTO'
+                    self.cita.save()
+
     def __str__(self):
         return f"Orden #{self.id} - {self.vehiculo.placa} ({self.get_estado_display()})"
 
     @property
     def total_repuestos(self):
         return sum(item.subtotal for item in self.repuestos.all())
+
+    @property
+    def costo_total(self):
+        costo_servicio = self.cita.servicio.precio if self.cita else 0
+        return self.total_repuestos + costo_servicio
 
 class OrdenRepuesto(models.Model):
     orden = models.ForeignKey(OrdenTrabajo, on_delete=models.CASCADE, related_name='repuestos')

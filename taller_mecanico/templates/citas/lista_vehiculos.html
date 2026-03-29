@@ -4,10 +4,23 @@
 Mis Vehículos - Taller Mecánico
 {% endblock %}
 {% block content %}
-<div class="card">    
-<div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">        <h2 class="mb-0">Mis Vehículos</h2>        <a href="
-{% url 'agregar_vehiculo' %}
-" class="btn btn-success">Agregar Vehículo</a>    </div>
+<div class="card shadow-sm border-0" style="border-radius: 12px; overflow: hidden;">    
+<div class="card-header bg-white py-3 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+    <h4 class="mb-3 mb-md-0 font-weight-bold" style="color: var(--primary);">
+        <i class="fas fa-car mr-2"></i> {% if es_staff %}Directorio de Vehículos{% else %}Mis Vehículos{% endif %}
+    </h4>
+    <div class="d-flex flex-column flex-sm-row w-100 w-md-auto align-items-sm-center">
+        <form method="GET" class="input-group mb-2 mb-sm-0 mr-sm-3 flex-grow-1" style="max-width: 350px;">
+            <input type="text" name="q" class="form-control bg-light border-0" placeholder="Buscar placa, dueño, marca..." value="{{ query }}">
+            <div class="input-group-append">
+                <button class="btn btn-light border-0" type="submit"><i class="fas fa-search text-muted"></i></button>
+            </div>
+        </form>
+        <a href="{% url 'agregar_vehiculo' %}" class="btn btn-primary shadow-sm" style="border-radius: 20px; white-space: nowrap;">
+            <i class="fas fa-plus mr-1"></i> Agregar Vehículo
+        </a>
+    </div>
+</div>
     
 <div class="card-body">        
 {% if vehiculos %}
@@ -15,7 +28,8 @@ Mis Vehículos - Taller Mecánico
 <div class="table-responsive">                
 <table class="table table-hover">                    
 <thead>                        
-<tr>                            
+<tr>
+{% if es_staff %}<th>Propietario</th>{% endif %}
 <th>Marca</th>                            
 <th>Modelo</th>                            
 <th>Año</th>                            
@@ -25,7 +39,8 @@ Mis Vehículos - Taller Mecánico
 {% for vehiculo in vehiculos %}
                         
 <tr>                            
-<td>
+{% if es_staff %}<td class="font-weight-bold text-dark">{{ vehiculo.propietario.get_full_name|default:vehiculo.propietario.username }}</td>{% endif %}
+<td class="align-middle">
 {{ vehiculo.marca }}
 </td>                            
 <td>
@@ -37,10 +52,10 @@ Mis Vehículos - Taller Mecánico
 <td>
 {{ vehiculo.placa }}
 </td>                            
-<td>
+<td class="align-middle">
 {{ vehiculo.color }}
 </td>                            
-<td>                                <a href="
+<td class="align-middle">                                <a href="
 {% url 'historial_vehiculo' vehiculo.id %}
 " class="btn btn-sm btn-primary" title="Historia Clínica"><i class="fas fa-file-medical"></i> Historial</a>                                <a href="
 {% url 'editar_vehiculo' vehiculo.id %}
@@ -52,9 +67,14 @@ Mis Vehículos - Taller Mecánico
         
 {% else %}
             
-<div class="alert alert-info">                No tienes vehículos registrados. <a href="
-{% url 'agregar_vehiculo' %}
-">Agrega uno ahora</a>.            </div>
+<div class="alert alert-info border-0 shadow-sm" style="border-radius: 8px;">                
+    <i class="fas fa-info-circle mr-2"></i>
+    {% if query %}
+    No se encontraron vehículos que coincidan con la búsqueda "<strong>{{ query }}</strong>". <a href="{% url 'lista_vehiculos' %}" class="alert-link">Ver todos</a>.
+    {% else %}
+    No hay vehículos registrados aún. <a href="{% url 'agregar_vehiculo' %}" class="alert-link">Agrega uno ahora</a>.
+    {% endif %}
+</div>
         
 {% endif %}
     </div>

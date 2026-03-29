@@ -146,3 +146,13 @@ class RecepcionVehiculoForm(forms.ModelForm):
         # Opcional: Hacer que algunos campos booleanos tengan el estilo de un checkbox bonito (Bootstrap custom-switch)
         for field in ['tiene_llanta_repuesto', 'tiene_gata_herramientas', 'tiene_radio', 'tiene_documentos']:
             self.fields[field].widget.attrs.update({'class': 'custom-control-input'})
+
+class TipoServicioForm(forms.ModelForm):
+    class Meta:
+        model = TipoServicio
+        fields = ['nombre', 'descripcion', 'categoria', 'duracion', 'precio']
+        widgets = {
+            'descripcion': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Descripción detallada del servicio...'}),
+            'duracion': forms.NumberInput(attrs={'placeholder': 'Duración en minutos (ej: 60)'}),
+            'precio': forms.NumberInput(attrs={'step': '0.01', 'placeholder': 'Costo sugerido'}),
+        }

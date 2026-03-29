@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Vehiculo, Cita, TipoServicio, Notificacion, RecepcionVehiculo
-from .forms import VehiculoForm, CitaForm, FechaHoraDisponibleForm, GestionCitaForm, RecepcionVehiculoForm
+from .forms import VehiculoForm, CitaForm, FechaHoraDisponibleForm, GestionCitaForm, RecepcionVehiculoForm, TipoServicioForm
 from django.utils import timezone
 import datetime
 from django.core.mail import send_mail
@@ -16,21 +16,49 @@ from usuarios.models import Perfil
 def es_staff(user):
     if not user.is_authenticated:
         return False
+    if getattr(user, 'is_superuser', False):
+        return True
     try:
         perfil = Perfil.objects.get(usuario=user)
-        return perfil.rol and perfil.rol.nombre in ['Administrador', 'Mecánico', 'Recepcionista']
+        return perfil.rol and perfil.rol.nombre in ['Administrador', 'Mecánico', 'Recepcionista', 'Recepción']
     except (Perfil.DoesNotExist, AttributeError):
         return False
 
 # Vistas para vehículos
 @login_required
 def lista_vehiculos(request):
-    if es_staff(request.user):
-        vehiculos = Vehiculo.objects.all().order_by('-fecha_registro')
+    es_staff_user = es_staff(request.user)
+    
+    if es_staff_user:
+        vehiculos = Vehiculo.objects.select_related('propietario').all().order_by('-fecha_registro')
     else:
         vehiculos = Vehiculo.objects.filter(propietario=request.user).order_by('-fecha_registro')
         
-    return render(request, 'citas/lista_vehiculos.html', {'vehiculos': vehiculos})
+    query = request.GET.get('q', '').strip()
+    if query:
+        from django.db.models import Q
+        if es_staff_user:
+            vehiculos = vehiculos.filter(
+                Q(placa__icontains=query) | 
+                Q(marca__icontains=query) | 
+                Q(modelo__icontains=query) |
+                Q(propietario__first_name__icontains=query) |
+                Q(propietario__last_name__icontains=query) |
+                Q(propietario__username__icontains=query) |
+                Q(propietario__email__icontains=query)
+            )
+        else:
+            vehiculos = vehiculos.filter(
+                Q(placa__icontains=query) | 
+                Q(marca__icontains=query) | 
+                Q(modelo__icontains=query)
+            )
+            
+    return render(request, 'citas/lista_vehiculos.html', {
+        'vehiculos': vehiculos,
+        'es_staff': es_staff_user,
+        'query': query
+    })
 
 @login_required
 def agregar_vehiculo(request):
@@ -89,11 +117,11 @@ def eliminar_vehiculo(request, vehiculo_id):
 # Vistas para citas
 @login_required
 def mis_citas(request):
-    es_staff = request.user.is_superuser or (hasattr(request.user, 'perfil') and request.user.perfil.rol and request.user.perfil.rol.nombre in ['Administrador', 'Recepcionista', 'Recepción', 'Mecánico'])
-    if es_staff:
-        citas = Cita.objects.all().order_by('-fecha', 'hora_inicio')
-    else:
-        citas = Cita.objects.filter(cliente=request.user).order_by('-fecha', 'hora_inicio')
+    if es_staff(request.user):
+        # El staff (Mecánico/Recepción/Admin) no necesita "Mis Citas", su panel central es el Calendario
+        return redirect('calendario_citas')
+    
+    citas = Cita.objects.select_related('vehiculo', 'servicio').filter(cliente=request.user).order_by('-fecha', 'hora_inicio')
     return render(request, 'citas/mis_citas.html', {'citas': citas})
 
 @login_required
@@ -320,7 +348,12 @@ def detalle_cita(request, cita_id):
 @login_required
 def cancelar_cita(request, cita_id):
     """Vista para cancelar una cita"""
-    cita = get_object_or_404(Cita, id=cita_id, cliente=request.user)
+    cita = get_object_or_404(Cita, id=cita_id)
+    
+    # Verificar que el usuario tenga permisos (Dueño de la cita o Staff/Mecánico)
+    if cita.cliente != request.user and not es_staff(request.user):
+        messages.error(request, 'No tienes permiso para cancelar esta cita.')
+        return redirect('mis_citas')
     
     # Solo se pueden cancelar citas pendientes o confirmadas
     if cita.estado not in ['PENDIENTE', 'CONFIRMADA']:
@@ -352,11 +385,13 @@ def calendario_citas(request):
         messages.error(request, 'No tienes permiso para acceder a esta sección.')
         return redirect('dashboard')
     
-    # Filtrar por fecha (si se proporciona)
+    # Filtrar por datos
     fecha = request.GET.get('fecha')
     categoria = request.GET.get('categoria')
+    estado = request.GET.get('estado')
     
-    citas = Cita.objects.all().order_by('fecha', 'hora_inicio')
+    # N+1 Optimization + Orden
+    citas = Cita.objects.select_related('cliente', 'vehiculo', 'servicio').all().order_by('fecha', 'hora_inicio')
     
     if fecha:
         try:
@@ -367,11 +402,18 @@ def calendario_citas(request):
     
     if categoria:
         citas = citas.filter(servicio__categoria=categoria)
+        
+    if estado:
+        citas = citas.filter(estado=estado)
+    else:
+        # Default: Ocultar canceladas en la Master Agenda
+        citas = citas.exclude(estado='CANCELADA')
     
     return render(request, 'citas/calendario_citas.html', {
         'citas': citas,
         'fecha_filtro': fecha,
         'categoria_filtro': categoria,
+        'estado_filtro': estado,
     })
 
 @login_required
@@ -581,3 +623,67 @@ def boleta_ingreso_pdf(request, recepcion_id):
         return redirect('dashboard')
         
     return render(request, 'citas/boleta_ingreso_pdf.html', {'recepcion': recepcion})
+
+# ==========================================
+# RUTAS DE SERVICIOS
+# ==========================================
+from django.contrib.auth.decorators import user_passes_test
+
+@login_required
+@user_passes_test(es_staff)
+def lista_servicios(request):
+    servicios = TipoServicio.objects.all().order_by('categoria', 'nombre')
+    return render(request, 'citas/lista_servicios.html', {'servicios': servicios})
+
+@login_required
+@user_passes_test(es_staff)
+def agregar_servicio(request):
+    if request.method == 'POST':
+        form = TipoServicioForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Servicio agregado exitosamente.')
+            return redirect('lista_servicios')
+    else:
+        form = TipoServicioForm()
+    
+    return render(request, 'citas/agregar_servicio.html', {
+        'form': form, 
+        'categorias': TipoServicio.CATEGORIAS
+    })
+
+@login_required
+@user_passes_test(es_staff)
+def editar_servicio(request, servicio_id):
+    servicio = get_object_or_404(TipoServicio, id=servicio_id)
+    
+    if request.method == 'POST':
+        form = TipoServicioForm(request.POST, instance=servicio)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Servicio actualizado correctamente.')
+            return redirect('lista_servicios')
+    else:
+        form = TipoServicioForm(instance=servicio)
+        
+    return render(request, 'citas/editar_servicio.html', {
+        'form': form, 
+        'servicio': servicio, 
+        'categorias': TipoServicio.CATEGORIAS
+    })
+
+@login_required
+@user_passes_test(es_staff)
+def eliminar_servicio(request, servicio_id):
+    servicio = get_object_or_404(TipoServicio, id=servicio_id)
+    
+    if request.method == 'POST':
+        try:
+            servicio.delete()
+            messages.success(request, 'Servicio eliminado correctamente.')
+        except:
+            messages.error(request, 'No se pudo eliminar el servicio porque ya está asociado a citas existentes.')
+            
+        return redirect('lista_servicios')
+        
+    return render(request, 'citas/eliminar_servicio.html', {'servicio': servicio})

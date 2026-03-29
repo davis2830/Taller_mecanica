@@ -96,6 +96,7 @@
 /* Bordes laterales por estado */
 .estado-pendiente { border-left: 4px solid var(--warning); }
 .estado-confirmada { border-left: 4px solid var(--info); }
+.estado-listo { border-left: 4px solid #d946ef; }
 .estado-completada { border-left: 4px solid var(--success); }
 .estado-cancelada { border-left: 4px solid var(--danger); opacity: 0.8; }
 
@@ -135,6 +136,7 @@
 }
 .badge-pendiente { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 .badge-confirmada { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.badge-listo { background: #fdf4ff; color: #86198f; border: 1px solid #f5d0fe; }
 .badge-completada { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
 .badge-cancelada { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 
@@ -237,7 +239,7 @@
     <div class="tab-pane fade show active" id="proximas" role="tabpanel" aria-labelledby="proximas-tab">
         <div class="row">
             {% for cita in citas %}
-                {% if cita.estado == 'PENDIENTE' or cita.estado == 'CONFIRMADA' %}
+                {% if cita.estado == 'PENDIENTE' or cita.estado == 'CONFIRMADA' or cita.estado == 'LISTO' %}
                 <div class="col-xl-6 mb-4">
                     <div class="cita-card estado-{{ cita.estado|lower }}">
                         <div class="cita-header">
@@ -255,6 +257,8 @@
                                     <span class="badge-custom badge-pendiente"><i class="fas fa-hourglass-half"></i>Pendiente</span>
                                 {% elif cita.estado == 'CONFIRMADA' %}
                                     <span class="badge-custom badge-confirmada"><i class="fas fa-check-double"></i>Confirmada</span>
+                                {% elif cita.estado == 'LISTO' %}
+                                    <span class="badge-custom badge-listo"><i class="fas fa-key"></i>Listo p/ Recoger</span>
                                 {% endif %}
                             </div>
                         </div>

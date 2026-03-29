@@ -52,10 +52,15 @@ def detalle_orden(request, orden_id):
                     # Registrar movimiento de inventario
                     MovimientoInventario.objects.create(
                         producto=producto,
-                        tipo_movimiento='SALIDA',
+                        tipo='SALIDA',
+                        motivo='SERVICIO',
                         cantidad=cantidad,
-                        referencia=f"Uso en Orden de Trabajo #{orden.id}",
-                        precio_unitario=producto.precio_venta
+                        precio_unitario=producto.precio_venta,
+                        stock_anterior=producto.stock_actual + cantidad,
+                        stock_nuevo=producto.stock_actual,
+                        observaciones=f"Uso en Orden de Trabajo #{orden.id}",
+                        usuario=request.user,
+                        cita=orden.cita if hasattr(orden, 'cita') else None
                     )
                     
                     # Agregar a la orden
@@ -112,13 +117,18 @@ def eliminar_repuesto_orden(request, repuesto_id):
     producto.stock_actual += repuesto_orden.cantidad
     producto.save()
     
-    # Borrar movimiento de salida anterior (o hacer modelo opuesto)
+    # Hacer modelo opuesto de movimiento
     MovimientoInventario.objects.create(
         producto=producto,
-        tipo_movimiento='ENTRADA',
+        tipo='ENTRADA',
+        motivo='DEVOLUCION',
         cantidad=repuesto_orden.cantidad,
-        referencia=f"Devolución de Orden de Trabajo #{orden_id}",
-        precio_unitario=repuesto_orden.precio_unitario
+        precio_unitario=repuesto_orden.precio_unitario,
+        stock_anterior=producto.stock_actual - repuesto_orden.cantidad,
+        stock_nuevo=producto.stock_actual,
+        observaciones=f"Devolución de Orden de Trabajo #{orden_id}",
+        usuario=request.user,
+        cita=repuesto_orden.orden.cita if hasattr(repuesto_orden.orden, 'cita') else None
     )
     
     repuesto_orden.delete()
