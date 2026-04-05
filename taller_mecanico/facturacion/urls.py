@@ -6,4 +6,5 @@ urlpatterns = [
     path('generar/<int:orden_id>/', views.generar_pre_factura, name='generar_pre_factura'),
     path('emitir/<int:factura_id>/', views.emitir_factura, name='emitir_factura'),
     path('imprimir/<int:factura_id>/', views.factura_print, name='factura_print'),
+    path('reenviar/<int:factura_id>/', views.reenviar_factura_email, name='reenviar_factura_email'),
 ]

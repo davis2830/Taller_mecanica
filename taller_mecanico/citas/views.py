@@ -7,6 +7,7 @@ from django.core.paginator import Paginator                  # FIX #9 — pagina
 from .models import Vehiculo, Cita, TipoServicio, Notificacion, RecepcionVehiculo
 from .forms import VehiculoForm, CitaForm, FechaHoraDisponibleForm, GestionCitaForm, RecepcionVehiculoForm, TipoServicioForm
 from .utils import enviar_email_cita                         # FIX #6 — import movido al top
+from .tasks import enviar_correo_cita_task
 from usuarios.models import Perfil
 from usuarios.permisos import es_admin_o_mecanico            # FIX #6 — import movido al top
 from django.utils import timezone
@@ -286,33 +287,27 @@ def nueva_cita(request, fecha, categoria):
                     enviado=False
                 )
 
-                # NOTA #1 (PENDIENTE): este bloque sigue siendo síncrono.
-                # Se migrará a tarea asíncrona en la próxima iteración.
+                # Migrado a Tarea Asíncrona (Celery)
                 dominio = request.get_host()
-                try:
-                    cliente_email = cita.cliente.email if cita.cliente else None
-                    if cliente_email and enviar_email_cita(cita, 'confirmacion', dominio=dominio):
-                        notificacion = Notificacion.objects.filter(
-                            cita=cita, tipo='CONFIRMACION'
-                        ).first()
-                        if notificacion:
-                            notificacion.enviado = True
-                            notificacion.save()
-                        messages.success(
-                            request,
-                            f'Cita agendada correctamente. Confirmación enviada a {cliente_email}.'
-                        )
-                    else:
-                        messages.success(request, 'Cita agendada correctamente.')
-                        if not cliente_email:
-                            if usuario_es_staff:
-                                messages.info(request, 'El cliente no tiene email registrado; no se envió confirmación.')
-                            else:
-                                messages.info(request, 'No tienes email registrado. Actualiza tu perfil para recibir confirmaciones.')
-                except Exception as e:
-                    print(f"[nueva_cita] Error al enviar email de confirmación: {e}")
+                cliente_email = cita.cliente.email if cita.cliente else None
+                
+                if cliente_email:
+                    # Enviar indicación a Celery de forma instantánea
+                    enviar_correo_cita_task.delay(cita.id, 'confirmacion', dominio=dominio)
+                    
+                    # Como es asíncrono, daremos por hecho que Celery enviará la confirmación
+                    # y marcamos la notificación de antemano para UX.
+                    notificacion = Notificacion.objects.filter(cita=cita, tipo='CONFIRMACION').first()
+                    if notificacion:
+                        notificacion.enviado = True
+                        notificacion.save()
+                    messages.success(request, f'Cita agendada correctamente. Confirmación enviada a {cliente_email}.')
+                else:
                     messages.success(request, 'Cita agendada correctamente.')
-                    messages.warning(request, 'No se pudo enviar la confirmación por email.')
+                    if usuario_es_staff:
+                        messages.info(request, 'El cliente no tiene email registrado; no se envió confirmación.')
+                    else:
+                        messages.info(request, 'No tienes email registrado. Actualiza tu perfil para recibir confirmaciones.')
 
                 return redirect('mis_citas')
 
@@ -497,19 +492,17 @@ def gestionar_cita(request, cita_id):
                 )
                 try:
                     if cita.cliente.email:
-                        print(f"[Email] Estado nuevo: {cita.estado} | Email: {cita.cliente.email}")
+                        print(f"[Celery Queue] Encolando Estado nuevo: {cita.estado} | Email: {cita.cliente.email}")
                         tipo_email = 'encuesta' if cita.estado == 'COMPLETADA' else 'cambio_estado'
-                        enviado = enviar_email_cita(cita, tipo_email)   # FIX #6 — ya importado al top
-                        print(f"[Email] {tipo_email} enviado: {enviado}")
-                        if enviado:
-                            notificacion = Notificacion.objects.filter(
-                                cita=cita, tipo='CAMBIO_ESTADO'
-                            ).last()
-                            if notificacion:
-                                notificacion.enviado = True
-                                notificacion.save()
+                        # Despachar tarea asíncrona
+                        enviar_correo_cita_task.delay(cita.id, tipo_email, dominio=request.get_host())
+                        # Pre-marcar la notificación como enviada para mejorar la UI
+                        notificacion = Notificacion.objects.filter(cita=cita, tipo='CAMBIO_ESTADO').last()
+                        if notificacion:
+                            notificacion.enviado = True
+                            notificacion.save()
                 except Exception as e:
-                    print(f"[Email ERROR] {e}")
+                    print(f"[Queue ERROR] {e}")
 
             messages.success(request, 'Cita actualizada correctamente.')
             return redirect('calendario_citas')

@@ -54,7 +54,7 @@ def register(request):
                 mail_subject = 'Activa tu cuenta en AutoServi Pro'
                 message = render_to_string('usuarios/email_activacion.html', {
                     'user': user,
-                    'domain': current_site.domain,
+                    'domain': '192.168.0.60:8000',
                     'uid': urlsafe_base64_encode(force_bytes(user.pk)),
                     'token': default_token_generator.make_token(user),
                 })

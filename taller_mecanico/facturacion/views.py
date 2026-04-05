@@ -5,6 +5,10 @@ from .models import Factura
 from taller.models import OrdenTrabajo
 from usuarios.permisos import es_admin_o_secretaria
 from django.utils import timezone
+from citas.tasks import enviar_correo_cita_task
+from .tasks import enviar_factura_task
+from citas.models import Notificacion
+from django.views.decorators.http import require_POST
 
 @login_required
 @user_passes_test(es_admin_o_secretaria)
@@ -97,6 +101,21 @@ def emitir_factura(request, factura_id):
             orden.cita.estado = 'COMPLETADA'
             orden.cita.save()
             
+            # --- Enviar email "Encuesta / Completada" via Celery
+            if orden.cita.cliente and orden.cita.cliente.email:
+                enviar_correo_cita_task.delay(orden.cita.id, 'encuesta', request.get_host())
+                Notificacion.objects.create(
+                    cita=orden.cita,
+                    tipo='CAMBIO_ESTADO',
+                    mensaje='Su cita ha cambiado de estado a Completada (Encuesta enviada).',
+                    enviado=True
+                )
+            # ---
+            
+        # Despachar correo de Factura automáticamente
+        if orden.cita and orden.cita.cliente and orden.cita.cliente.email:
+            enviar_factura_task.delay(factura.id, orden.cita.cliente.email)
+            
         messages.success(request, f"¡Factura {factura.numero_factura} emitida correctamente con pago en {factura.get_metodo_pago_display()}!")
         return redirect('factura_print', factura_id=factura.id)
         
@@ -111,3 +130,18 @@ def factura_print(request, factura_id):
     """
     factura = get_object_or_404(Factura, id=factura_id)
     return render(request, 'facturacion/factura_print.html', {'factura': factura})
+
+@login_required
+@require_POST
+@user_passes_test(es_admin_o_secretaria)
+def reenviar_factura_email(request, factura_id):
+    factura = get_object_or_404(Factura, id=factura_id)
+    orden = factura.orden
+    
+    if orden.cita and orden.cita.cliente and orden.cita.cliente.email:
+        enviar_factura_task.delay(factura.id, orden.cita.cliente.email)
+        messages.success(request, f'La copia de la factura {factura.numero_factura} ha sido encolada para su envío al correo {orden.cita.cliente.email}.')
+    else:
+        messages.error(request, 'No se pudo reenviar la factura. El cliente no tiene correo registrado.')
+        
+    return redirect('factura_print', factura_id=factura.id)
