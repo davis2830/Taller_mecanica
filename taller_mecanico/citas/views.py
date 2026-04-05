@@ -288,12 +288,10 @@ def nueva_cita(request, fecha, categoria):
                 )
 
                 # Migrado a Tarea Asíncrona (Celery)
-                dominio = request.get_host()
                 cliente_email = cita.cliente.email if cita.cliente else None
-                
                 if cliente_email:
                     # Enviar indicación a Celery de forma instantánea
-                    enviar_correo_cita_task.delay(cita.id, 'confirmacion', dominio=dominio)
+                    enviar_correo_cita_task.delay(cita.id, 'confirmacion')
                     
                     # Como es asíncrono, daremos por hecho que Celery enviará la confirmación
                     # y marcamos la notificación de antemano para UX.
@@ -495,7 +493,7 @@ def gestionar_cita(request, cita_id):
                         print(f"[Celery Queue] Encolando Estado nuevo: {cita.estado} | Email: {cita.cliente.email}")
                         tipo_email = 'encuesta' if cita.estado == 'COMPLETADA' else 'cambio_estado'
                         # Despachar tarea asíncrona
-                        enviar_correo_cita_task.delay(cita.id, tipo_email, dominio=request.get_host())
+                        enviar_correo_cita_task.delay(cita.id, tipo_email)
                         # Pre-marcar la notificación como enviada para mejorar la UI
                         notificacion = Notificacion.objects.filter(cita=cita, tipo='CAMBIO_ESTADO').last()
                         if notificacion:

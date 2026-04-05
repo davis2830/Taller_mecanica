@@ -409,6 +409,19 @@
           </div>
         </div>
       </div>
+
+      <div class="section-divider"></div>
+
+      <div class="row">
+        <div class="col-12">
+          <div class="env-field-group" style="margin-bottom:0;">
+            <label class="env-label" for="FRONTEND_URL"><i class="fas fa-link" style="font-size:0.8rem;"></i> URL Base del Sistema (Redirecciones y Correos)</label>
+            <input type="url" id="FRONTEND_URL" name="FRONTEND_URL" class="env-input"
+                   value="{{ env.FRONTEND_URL|default:'http://localhost:8000' }}" placeholder="https://misistema.com">
+            <p class="env-hint"><i class="fas fa-info-circle"></i> Esta dirección se inyectará en todos los botones y enlaces mágicos mandados por email (citas, verificaciones de cuenta). Sin slash al final.</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

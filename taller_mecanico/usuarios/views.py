@@ -10,6 +10,7 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.contrib.auth.tokens import default_token_generator
+from django.conf import settings
 
 from .forms import UserRegisterForm, UserUpdateForm, PerfilUpdateForm, RolForm, AsignarRolForm
 from .models import Rol, Perfil
@@ -54,7 +55,7 @@ def register(request):
                 mail_subject = 'Activa tu cuenta en AutoServi Pro'
                 message = render_to_string('usuarios/email_activacion.html', {
                     'user': user,
-                    'domain': '192.168.0.60:8000',
+                    'base_url': settings.FRONTEND_URL.rstrip('/'),
                     'uid': urlsafe_base64_encode(force_bytes(user.pk)),
                     'token': default_token_generator.make_token(user),
                 })
@@ -97,6 +98,43 @@ def activar_cuenta(request, uidb64, token):
     else:
         messages.error(request, '⚠️ El enlace de activación es inválido o ya expiró por seguridad. Intenta registrar tu cuenta de nuevo.')
         return redirect('login')
+
+def reenviar_activacion(request):
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        if email:
+            try:
+                user = User.objects.get(email=email)
+                if getattr(user, 'is_active', False):
+                    messages.info(request, 'Esta cuenta ya se encuentra activa. Puedes iniciar sesión.')
+                    return redirect('login')
+                
+                # Re-enviar correo de activación
+                mail_subject = 'Activa tu cuenta en AutoServi Pro'
+                message = render_to_string('usuarios/email_activacion.html', {
+                    'user': user,
+                    'base_url': settings.FRONTEND_URL.rstrip('/'),
+                    'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+                    'token': default_token_generator.make_token(user),
+                })
+                
+                send_mail(
+                    mail_subject,
+                    "", # mensaje original en texto plano
+                    None, # usa DEFAULT_FROM_EMAIL
+                    [email],
+                    html_message=message,
+                    fail_silently=False,
+                )
+                
+                messages.success(request, f'¡Enlace reenviado! Hemos enviado un nuevo correo a {email}. Por favor revisa tu bandeja de entrada o SPAM.')
+                return redirect('login')
+            except User.DoesNotExist:
+                messages.error(request, 'No se encontró ninguna cuenta registrada con este correo electrónico.')
+        else:
+            messages.error(request, 'Por favor ingresa un correo electrónico válido.')
+            
+    return render(request, 'usuarios/reenviar_activacion.html')
 
 @login_required
 def profile(request):
@@ -290,11 +328,39 @@ def eliminar_cliente(request, cliente_id):
     
     if request.method == 'POST':
         nombre = cliente.get_full_name() or cliente.username
-        cliente.delete()
-        messages.success(request, f'Cliente {nombre} eliminado correctamente. Todos sus registros asociados también fueron borrados.')
+        try:
+            from django.db.models.deletion import ProtectedError, RestrictedError
+            cliente.delete()
+            messages.success(request, f'Cliente {nombre} eliminado correctamente. Todos sus registros asociados también fueron borrados.')
+        except (ProtectedError, RestrictedError) as e:
+            messages.error(request, f'No se puede eliminar a {nombre} porque tiene registros en el sistema (como Facturas u Órdenes pagadas) que no pueden ser borrados por seguridad contable u operativa. Si no deseas verlo, considera deshabilitar su cuenta.')
         return redirect('lista_clientes')
         
     return redirect('lista_clientes')
+
+@login_required
+def toggle_estado_usuario(request, user_id):
+    es_staff = request.user.is_superuser or (hasattr(request.user, 'perfil') and request.user.perfil.rol and request.user.perfil.rol.nombre in ['Administrador', 'Recepcionista'])
+    if not es_staff:
+        messages.error(request, 'No tienes permiso para modificar el estado de los usuarios.')
+        return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+        
+    usuario = get_object_or_404(User, id=user_id)
+    
+    if request.method == 'POST':
+        # Prevenir que un usuario se deshabilite a sí mismo
+        if usuario.id == request.user.id:
+            messages.error(request, 'No puedes deshabilitar tu propia cuenta activa.')
+            return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+            
+        usuario.is_active = not usuario.is_active
+        usuario.save()
+        
+        estado = "habilitado" if usuario.is_active else "deshabilitado"
+        nombre = usuario.get_full_name() or usuario.username
+        messages.success(request, f'El usuario {nombre} ha sido {estado} exitosamente.')
+        
+    return redirect(request.META.get('HTTP_REFERER', 'lista_clientes'))
 
 
 @login_required
@@ -499,7 +565,7 @@ def configuracion_sistema(request):
         with open(path, 'w', encoding='utf-8') as f:
             f.write(header)
             f.write("# --- Seguridad y Django ---\n")
-            for key in ['SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS']:
+            for key in ['SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS', 'FRONTEND_URL']:
                 if key in data:
                     f.write(f"{key}={data[key]}\n")
             f.write("\n# --- Base de Datos ---\n")
@@ -516,7 +582,7 @@ def configuracion_sistema(request):
         
         # Actualizar con los valores del formulario
         campos = [
-            'SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS',
+            'SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS', 'FRONTEND_URL',
             'DB_ENGINE', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DB_PORT',
             'EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USE_TLS', 'EMAIL_HOST_USER', 'EMAIL_HOST_PASSWORD', 'DEFAULT_FROM_EMAIL',
         ]

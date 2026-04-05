@@ -7,6 +7,7 @@ from .forms import TallerLoginForm
 urlpatterns = [
     path('register/', views.register, name='register'),
     path('activar/<uidb64>/<token>/', views.activar_cuenta, name='activar_cuenta'),
+    path('reenviar-activacion/', views.reenviar_activacion, name='reenviar_activacion'),
     path('login/', auth_views.LoginView.as_view(
         template_name='usuarios/login.html',
         authentication_form=TallerLoginForm
@@ -18,6 +19,7 @@ urlpatterns = [
     path('roles/nuevo/', views.crear_rol, name='crear_rol'),
     path('usuarios/', views.lista_usuarios, name='lista_usuarios'),
     path('usuarios/<int:user_id>/asignar-rol/', views.asignar_rol, name='asignar_rol'),
+    path('usuarios/<int:user_id>/toggle-estado/', views.toggle_estado_usuario, name='toggle_estado_usuario'),
     path('clientes/', views.lista_clientes, name='lista_clientes'),
     path('clientes/nuevo/', views.agregar_cliente, name='agregar_cliente'),
     path('clientes/editar/<int:cliente_id>/', views.editar_cliente, name='editar_cliente'),

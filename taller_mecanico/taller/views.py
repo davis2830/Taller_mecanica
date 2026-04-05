@@ -155,11 +155,10 @@ def actualizar_estado_orden(request):
             cita = orden.cita
             from citas.tasks import enviar_correo_cita_task
             try:
-                dominio = request.get_host()
                 if nuevo_estado == 'EN_REVISION' and estado_anterior != 'EN_REVISION':
-                    enviar_correo_cita_task.delay(cita.id, 'en_revision', dominio)
+                    enviar_correo_cita_task.delay(cita.id, 'en_revision')
                 elif nuevo_estado == 'LISTO' and estado_anterior != 'LISTO':
-                    enviar_correo_cita_task.delay(cita.id, 'listo', dominio)
+                    enviar_correo_cita_task.delay(cita.id, 'listo')
             except Exception as email_err:
                 print(f"[Notificación Kanban] Error al encolar email celery: {email_err}")
 

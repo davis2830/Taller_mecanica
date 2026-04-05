@@ -10,7 +10,7 @@ def formato_fecha_es(fecha):
     """Traduce la fecha al idioma español para obviar el locale del sistema operativo"""
     return f"{def_dias[fecha.weekday()]}, {fecha.day} de {def_meses[fecha.month]} de {fecha.year}"
 
-def enviar_email_cita(cita, tipo_email, destinatario_email=None, dominio=None):
+def enviar_email_cita(cita, tipo_email, destinatario_email=None):
     """
     Enviar email relacionado con una cita
     tipo_email: 'confirmacion', 'recordatorio', 'cambio_estado'
@@ -34,18 +34,17 @@ def enviar_email_cita(cita, tipo_email, destinatario_email=None, dominio=None):
             
             # Generar enlace mágico si pasaron el dominio
             from django.core.signing import Signer
-            if dominio:
-                signer = Signer()
-                token = signer.sign(str(cita.id))
-                protocol = 'https' if settings.SECURE_SSL_REDIRECT else 'http'
-                enlace = f"{protocol}://{dominio}/citas/confirmar-email/{token}/"
-                boton_confirmar = f'''
-                <div style="text-align: center; margin: 35px 0;">
-                    <a href="{enlace}" style="background-color: #22c55e; color: white; padding: 16px 32px; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 10px rgba(34, 197, 94, 0.3);">
-                        ✅ Confirmar mi Cita Exactamente
-                    </a>
-                </div>
-                '''
+            signer = Signer()
+            token = signer.sign(str(cita.id))
+            base_url = settings.FRONTEND_URL.rstrip('/')
+            enlace = f"{base_url}/citas/confirmar-email/{token}/"
+            boton_confirmar = f'''
+            <div style="text-align: center; margin: 35px 0;">
+                <a href="{enlace}" style="background-color: #22c55e; color: white; padding: 16px 32px; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 10px rgba(34, 197, 94, 0.3);">
+                    ✅ Confirmar mi Cita Exactamente
+                </a>
+            </div>
+            '''
         else:
             emoji = '✅'
             asunto = f'✅ Confirmación de Cita - {cita.servicio.nombre}'

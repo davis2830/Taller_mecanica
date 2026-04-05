@@ -14,6 +14,9 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost', cast=Csv())
 
+# URL Base para envío de correos asíncronos y creación de enlaces mágicos
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:8000')
+
 
 # Application definition
 

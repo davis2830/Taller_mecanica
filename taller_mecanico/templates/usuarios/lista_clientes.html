@@ -41,6 +41,9 @@
                     <td>
                         <span class="ds-truncate" style="max-width:200px;font-weight:700;color:#1e293b;display:block">
                             {{ cliente.get_full_name|default:cliente.username }}
+                            {% if not cliente.is_active %}
+                            <span class="badge" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;font-size:0.6rem;padding:2px 6px;margin-left:4px;vertical-align:middle;text-transform:uppercase;">Inactivo</span>
+                            {% endif %}
                         </span>
                         <span class="ds-truncate" style="max-width:200px;font-size:0.8rem;color:#64748b">
                             {{ cliente.email|default:"Sin correo electrónico" }}
@@ -66,6 +69,21 @@
                             <a href="{% url 'editar_cliente' cliente.id %}" class="ds-btn ds-btn-icon btn-edit" title="Editar Cliente">
                                 <i class="fas fa-edit"></i>
                             </a>
+                            
+                            <!-- Botón Deshabilitar/Habilitar -->
+                            <form action="{% url 'toggle_estado_usuario' cliente.id %}" method="post" style="display:inline;margin:0;">
+                                {% csrf_token %}
+                                {% if cliente.is_active %}
+                                    <button type="submit" class="ds-btn ds-btn-icon" style="color:#d97706; background:#fffbeb; border:1px solid #fde68a;" title="Deshabilitar Cliente" onclick="return confirm('¿Deshabilitar a este cliente? Perderá acceso al sistema.');">
+                                        <i class="fas fa-user-slash"></i>
+                                    </button>
+                                {% else %}
+                                    <button type="submit" class="ds-btn ds-btn-icon" style="color:#16a34a; background:#f0fdf4; border:1px solid #bbf7d0;" title="Habilitar Cliente" onclick="return confirm('¿Volver a habilitar a este cliente?');">
+                                        <i class="fas fa-user-check"></i>
+                                    </button>
+                                {% endif %}
+                            </form>
+                            
                             <!-- Botón modal -->
                             <button type="button" class="ds-btn ds-btn-icon btn-delete" data-toggle="modal" data-target="#deleteCliente{{ cliente.id }}" title="Eliminar Cliente">
                                 <i class="fas fa-trash-alt"></i>

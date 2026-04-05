@@ -128,7 +128,19 @@
             {% if es_admin %}
             <div style="display:flex;gap:8px">
                 <a href="{% url 'asignar_rol' u.id %}" class="ds-btn ds-btn-secondary ds-btn-sm" style="flex:1;justify-content:center"><i class="fas fa-user-shield"></i> Permisos</a>
-                <a href="#" class="ds-btn ds-btn-ghost ds-btn-sm" style="flex:1;justify-content:center"><i class="fas fa-pen"></i> Perfil</a>
+                
+                <form action="{% url 'toggle_estado_usuario' u.id %}" method="post" style="flex:1; display:flex;">
+                    {% csrf_token %}
+                    {% if u.is_active %}
+                        <button type="submit" class="ds-btn ds-btn-ghost ds-btn-sm" style="width:100%; justify-content:center; color:#d97706" onclick="return confirm('¿Deshabilitar a este usuario? Perderá todos sus privilegios de acceso.');">
+                            <i class="fas fa-user-slash"></i> Baja
+                        </button>
+                    {% else %}
+                        <button type="submit" class="ds-btn ds-btn-ghost ds-btn-sm" style="width:100%; justify-content:center; color:#16a34a" onclick="return confirm('¿Volver a habilitar a este usuario?');">
+                            <i class="fas fa-user-check"></i> Alta
+                        </button>
+                    {% endif %}
+                </form>
             </div>
             {% endif %}
         </div>

@@ -103,7 +103,7 @@ def emitir_factura(request, factura_id):
             
             # --- Enviar email "Encuesta / Completada" via Celery
             if orden.cita.cliente and orden.cita.cliente.email:
-                enviar_correo_cita_task.delay(orden.cita.id, 'encuesta', request.get_host())
+                enviar_correo_cita_task.delay(orden.cita.id, 'encuesta')
                 Notificacion.objects.create(
                     cita=orden.cita,
                     tipo='CAMBIO_ESTADO',
