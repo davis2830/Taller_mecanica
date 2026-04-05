@@ -143,6 +143,14 @@ def enviar_email_cita(cita, tipo_email, destinatario_email=None, dominio=None):
         'CANCELADA': '#dc3545'
     }.get(cita.estado, '#6c757d')
     
+    # Calcular precio real estimado / cerrado (Tomando en cuenta repuestos del Taller si los hubiere)
+    precio_mostrar = float(cita.servicio.precio)
+    if hasattr(cita, 'orden_trabajo') and cita.orden_trabajo:
+        try:
+            precio_mostrar += float(cita.orden_trabajo.total_repuestos)
+        except Exception:
+            pass
+    
     mensaje_html = f"""
     <html>
     <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4;">
@@ -210,11 +218,11 @@ def enviar_email_cita(cita, tipo_email, destinatario_email=None, dominio=None):
                         </tr>
                         <tr>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e9ecef; font-weight: 600; color: #495057;">
-                                💰 Precio:
+                                💰 Valor Total Estimado:
                             </td>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e9ecef; color: #212529;">
                                 <span style="font-size: 18px; font-weight: 600; color: {color_principal};">
-                                    Q{cita.servicio.precio}
+                                    Q{precio_mostrar:.2f}
                                 </span>
                             </td>
                         </tr>
@@ -299,7 +307,7 @@ DETALLES DE LA CITA:
 🕐 Hora: {cita.hora_inicio.strftime('%H:%M')} - {cita.hora_fin.strftime('%H:%M')}
 🔧 Servicio: {cita.servicio.nombre} ({cita.servicio.get_categoria_display()})
 🚗 Vehículo: {cita.vehiculo.marca} {cita.vehiculo.modelo} ({cita.vehiculo.placa})
-💰 Precio: Q{cita.servicio.precio}
+💰 Valor Total Estimado: Q{precio_mostrar:.2f}
 📊 Estado: {cita.get_estado_display()}
 
 {f"📝 Notas: {cita.notas}" if cita.notas else ""}

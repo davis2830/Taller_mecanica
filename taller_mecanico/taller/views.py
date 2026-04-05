@@ -153,14 +153,15 @@ def actualizar_estado_orden(request):
         # ── Notificaciones automáticas al cliente ──
         if hasattr(orden, 'cita') and orden.cita and orden.cita.cliente.email:
             cita = orden.cita
-            from citas.utils import enviar_email_cita
+            from citas.tasks import enviar_correo_cita_task
             try:
+                dominio = request.get_host()
                 if nuevo_estado == 'EN_REVISION' and estado_anterior != 'EN_REVISION':
-                    enviar_email_cita(cita, 'en_revision')
+                    enviar_correo_cita_task.delay(cita.id, 'en_revision', dominio)
                 elif nuevo_estado == 'LISTO' and estado_anterior != 'LISTO':
-                    enviar_email_cita(cita, 'listo')
+                    enviar_correo_cita_task.delay(cita.id, 'listo', dominio)
             except Exception as email_err:
-                print(f"[Notificación Kanban] Error al enviar email: {email_err}")
+                print(f"[Notificación Kanban] Error al encolar email celery: {email_err}")
 
         return JsonResponse({'success': True, 'estado': orden.estado})
         
