@@ -184,3 +184,5 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Alternativo
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+

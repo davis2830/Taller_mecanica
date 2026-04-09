@@ -183,3 +183,12 @@ media_root/
 
 # Specific project files you probably don't want tracked
 myapp_models.png  # Diagram that is auto-generated or not necessary for source
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+*.log
+venv/
+.env
